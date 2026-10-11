@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Norgeskart med vær</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=11">
+  <link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
   <header class="topbar">
@@ -17,6 +17,7 @@
     <div class="controls">
       <label><input type="checkbox" id="toggle-weather" checked> Vær (Yr)</label>
       <label><input type="checkbox" id="toggle-huts"> Turisthytter</label>
+      <label><input type="checkbox" id="toggle-peaks"> Turmål</label>
       <label><input type="checkbox" id="toggle-trails"> Stier
         <select id="trail-source" title="Kilde for stier">
           <option value="osm">OpenStreetMap</option>
@@ -55,7 +56,7 @@
     <div id="status" class="status" hidden></div>
 
     <aside id="trip-panel" class="trip-panel" hidden aria-label="Tur mellom hytter">
-      <header><span>Tur mellom hytter</span><button type="button" id="trip-reset" title="Nullstill tur">×</button></header>
+      <header><span>Tur mellom hytter og turmål</span><button type="button" id="trip-reset" title="Nullstill tur">×</button></header>
       <div class="trip-body">
         <div class="trip-row"><label class="trip-label" for="trip-from-select">Fra</label><select id="trip-from-select"><option value="">Velg starthytte …</option></select></div>
         <div class="trip-row"><label class="trip-label" for="trip-to-select">Til</label><select id="trip-to-select"><option value="">Velg målhytte …</option></select></div>
@@ -135,6 +136,6 @@
   </footer>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>

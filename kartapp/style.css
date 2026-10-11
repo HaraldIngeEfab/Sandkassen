@@ -189,6 +189,9 @@ main { position: relative; flex: 1; min-height: 0; }
 .hut-marker.staffed { --hut: #c0392b; }
 .hut-marker.self-service { --hut: #8a3b12; }
 .hut-marker.shelter { --hut: #4a6b2a; }
+.hut-marker.peak { --hut: #2c3e50; border-radius: 8px; }
+.hut-marker.viewpoint { --hut: #0e7c86; }
+.hut-cluster.peak { background: #2c3e50; border-radius: 10px; }
 .hut-marker.trip-start { --hut: #0b5fff; box-shadow: 0 0 0 4px rgba(11,95,255,.35), 0 3px 8px rgba(0,0,0,.4); }
 .hut-marker.trip-end { --hut: #7b1fa2; box-shadow: 0 0 0 4px rgba(123,31,162,.35), 0 3px 8px rgba(0,0,0,.4); }
 #map.zoom-far .hut-marker { width: 26px; height: 26px; border-width: 2px; }

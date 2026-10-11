@@ -11,6 +11,7 @@ En enkel kartapp bygget på åpne norske datatjenester:
 | Høyde over havet for et punkt | `ws.geonorge.no/hoydedata/v1/punkt` |
 | Værvarsel | MET Norge / Yr, `api.met.no/weatherapi/locationforecast/2.0/compact` |
 | Turisthytter | OpenStreetMap via Overpass API (`tourism=alpine_hut`, `wilderness_hut`, enkle buer) |
+| Turmål | OpenStreetMap via Overpass API (`natural=peak` med navn, `tourism=viewpoint`) |
 | Stier | Waymarked Trails (OSM-vandreruter som fliselag) eller Kartverkets WMS «Tur- og friluftsruter» |
 | 3D-terreng | AWS Terrain Tiles (Mapzen Terrarium, ca. 30 m oppløsning) vist med MapLibre GL JS |
 | Ruter mellom hytter | BRouter (`brouter.de`, profil `hiking-mountain`) på OpenStreetMap-data |
@@ -35,7 +36,12 @@ En enkel kartapp bygget på åpne norske datatjenester:
   høydemodellen, og vær-, hytte- og stilagene som er slått på følger med. Tilt og roter med to fingre
   på nettbrett eller høyreklikk og dra på PC. Glideren styrer hvor mye terrenget overdrives.
   MapLibre lastes først når knappen brukes. «Tilbake til 2D» tar med seg posisjonen tilbake.
-- **Tur mellom hytter**: velg «Start tur her» i én hyttepopup og «Tur hit» i en annen. Ruten beregnes
+- **Turmål**: navngitte fjelltopper og utsiktspunkter fra OpenStreetMap. Utzoomet vises bare topper over
+  2000 m, så 1500 m og 1000 m, og fra zoomnivå 12 alle navngitte topper og utsiktspunkter. Popupen viser
+  høyde, primærfaktor og Wikipedia-lenke når det finnes. Turmål kan velges som start eller mål for turer.
+- Vær, turisthytter, turmål og stier kan slås av og på også mens 3D-kartet er åpent, og hentes for det
+  utsnittet du beveger deg til i 3D.
+- **Tur mellom hytter og turmål**: velg «Start tur her» i én hyttepopup og «Tur hit» i en annen. Ruten beregnes
   langs stier med BRouter og tegnes på kartet med lengde, stigning, fall og anslått tid etter Naismiths
   regel. Finner ikke BRouter noen sti, brukes rett linje og det sies fra. «Fly turen i 3D» åpner
   3D-kartet og lar kameraet følge stien fra start til mål med høydeprofil, framdriftsglider, fart og pause.

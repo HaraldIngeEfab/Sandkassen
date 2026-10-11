@@ -654,18 +654,25 @@
   trailToggle.addEventListener("change", updateTrails);
   trailSource.addEventListener("change", () => { if (trailToggle.checked) updateTrails(); });
 
-  // ---------- Turisthytter fra OpenStreetMap (Overpass) ----------
+  // ---------- Turisthytter og turmål fra OpenStreetMap (Overpass) ----------
   const OVERPASS_ENDPOINTS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
-  const hutLayer = L.layerGroup();
-  const hutToggle = document.getElementById("toggle-huts");
-  const huts = { loadedBounds: null, timer: null, inflight: null, byId: new Map(), data: new Map() };
-
+  const CLUSTER_MAX_ZOOM = 12; // over dette vises alle punkter enkeltvis
   const HUT_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 12h3v8h5v-5h4v5h5v-8h3z"/></svg>';
+  const PEAK_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 2 20h20z"/></svg>';
+  const VIEW_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5C6.5 5 2.3 9 1 12c1.3 3 5.5 7 11 7s9.7-4 11-7c-1.3-3-5.5-7-11-7zm0 11.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9zm0-7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>';
 
   function hutKind(tags) {
-    if (tags.tourism === "alpine_hut") return { cls: "staffed", label: "Betjent turisthytte" };
-    if (tags.tourism === "wilderness_hut") return { cls: "self-service", label: "Selvbetjent eller ubetjent hytte" };
-    return { cls: "shelter", label: "Gapahuk eller enkel bu" };
+    if (tags.natural === "peak") return { cls: "peak", label: "Fjelltopp", svg: PEAK_SVG };
+    if (tags.tourism === "viewpoint") return { cls: "viewpoint", label: "Utsiktspunkt", svg: VIEW_SVG };
+    if (tags.tourism === "alpine_hut") return { cls: "staffed", label: "Betjent turisthytte", svg: HUT_SVG };
+    if (tags.tourism === "wilderness_hut") return { cls: "self-service", label: "Selvbetjent eller ubetjent hytte", svg: HUT_SVG };
+    return { cls: "shelter", label: "Gapahuk eller enkel bu", svg: HUT_SVG };
+  }
+  function hutName(h) { return h.tags.name || h.tags["name:no"] || hutKind(h.tags).label; }
+  function poiLabel(h) {
+    const name = h.tags.name || "";
+    if (h.tags.natural === "peak" && h.tags.ele) return `${name} ${Math.round(Number(h.tags.ele))} moh.`;
+    return name;
   }
 
   async function overpass(query) {
@@ -683,20 +690,24 @@
   function hutPopup(h) {
     const t = h.tags;
     const kind = hutKind(t);
-    const name = t.name || t["name:no"] || "Hytte uten navn";
+    const name = t.name || t["name:no"] || (kind.cls === "peak" ? "Topp uten navn" : "Hytte uten navn");
     const rows = [];
+    if (t.ele) rows.push(["Høyde", `${Math.round(Number(t.ele))} moh.`]);
+    if (t.prominence) rows.push(["Primærfaktor", `${Math.round(Number(t.prominence))} m`]);
     if (t.operator) rows.push(["Driftes av", t.operator]);
     const beds = t.beds || t.capacity;
     if (beds) rows.push(["Senger", beds]);
     if (t.fee) rows.push(["Betaling", t.fee === "yes" ? "Ja" : t.fee === "no" ? "Nei" : t.fee]);
     if (t.reservation) rows.push(["Booking", t.reservation === "required" ? "Påkrevd" : t.reservation === "recommended" ? "Anbefalt" : t.reservation]);
     if (t.opening_hours) rows.push(["Åpent", t.opening_hours]);
-    if (t.ele) rows.push(["Høyde", `${Math.round(Number(t.ele))} moh.`]);
     if (t.phone || t["contact:phone"]) rows.push(["Telefon", t.phone || t["contact:phone"]]);
     if (t.description) rows.push(["Info", t.description]);
     const site = t.website || t["contact:website"] || t.url;
+    let wiki = null;
+    if (t.wikipedia && /^[a-z]{2,3}:/.test(t.wikipedia)) { const [lang, ...rest] = t.wikipedia.split(":"); wiki = `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(rest.join(":"))}`; }
     const utUrl = "https://ut.no/sok?q=" + encodeURIComponent(name);
     const osmUrl = `https://www.openstreetmap.org/${h.type}/${h.id}`;
+    const key = `${h.type}/${h.id}`;
     return `
       <div class="hut">
         <h3>${esc(name)}</h3>
@@ -705,15 +716,54 @@
         <div class="actions">
           <button type="button" onclick="window.__wxHere(${h.lat},${h.lon},${JSON.stringify(name).replace(/"/g, "&quot;")})">Vær her</button>
           ${site ? `<a href="${esc(site)}" target="_blank" rel="noopener">Nettside</a>` : ""}
+          ${wiki ? `<a href="${esc(wiki)}" target="_blank" rel="noopener">Wikipedia</a>` : ""}
           <a href="${esc(utUrl)}" target="_blank" rel="noopener">Søk på UT.no</a>
           <a href="${esc(osmUrl)}" target="_blank" rel="noopener">OSM</a>
         </div>
         <div class="actions">
-          <button type="button" onclick="window.__tripSet('start','${h.type}/${h.id}')">Start tur her</button>
-          <button type="button" onclick="window.__tripSet('end','${h.type}/${h.id}')">Tur hit</button>
+          <button type="button" onclick="window.__tripSet('start','${key}')">Start tur her</button>
+          <button type="button" onclick="window.__tripSet('end','${key}')">Tur hit</button>
         </div>
       </div>`;
   }
+
+  // En samling punkter (hytter eller turmål) med henting, mellomlager, klumping og tegning
+  function makeCollection(opts) {
+    return {
+      data: new Map(), byId: new Map(), loadedBounds: null, loadedLevel: -1, inflight: null, timer: null,
+      layer: L.layerGroup(), clusterLayer: L.layerGroup(), ...opts,
+    };
+  }
+
+  const huts = makeCollection({
+    label: "turisthytter",
+    toggle: document.getElementById("toggle-huts"),
+    clusterCls: "",
+    // detaljnivå: enkle buer og gapahuker er det svært mange av, hent dem bare innzoomet
+    level: (zoom) => (zoom >= 9 ? 1 : 0),
+    query: (bbox, level) =>
+      `nwr["tourism"~"^(alpine_hut|wilderness_hut)$"](${bbox});` +
+      (level >= 1 ? `nwr["amenity"="shelter"]["shelter_type"="basic_hut"](${bbox});` : ""),
+  });
+
+  const peaks = makeCollection({
+    label: "turmål",
+    toggle: document.getElementById("toggle-peaks"),
+    clusterCls: "peak",
+    // detaljnivå: utzoomet bare de høyeste toppene, innzoomet alle navngitte topper og utsiktspunkter
+    level: (zoom) => (zoom >= 12 ? 3 : zoom >= 10 ? 2 : zoom >= 8 ? 1 : 0),
+    query: (bbox, level) => {
+      const minEle = [2000, 1500, 1000, 0][level];
+      const eleFilter = minEle > 0 ? `(if: number(t["ele"]) >= ${minEle})` : "";
+      return `node["natural"="peak"]["name"]${eleFilter}(${bbox});` +
+        (level >= 2 ? `nwr["tourism"="viewpoint"]["name"](${bbox});` : "");
+    },
+  });
+  const collections = [huts, peaks];
+  const hutToggle = huts.toggle; // brukes av turpanelet
+  const hutLayer = huts.layer;
+
+  function getPoi(key) { return huts.data.get(key) || peaks.data.get(key) || null; }
 
   let hutsChanged = false;
   function updateZoomClasses() {
@@ -724,31 +774,26 @@
   map.on("zoomend", updateZoomClasses);
   updateZoomClasses();
 
-  const HUT_SHELTER_MIN_ZOOM = 9;  // gapahuker og enkle buer er det svært mange av; hent dem bare innzoomet
-  const HUT_CLUSTER_MAX_ZOOM = 12; // over dette vises alle hytter enkeltvis
-  const clusterLayer = L.layerGroup();
-
-  async function loadHuts() {
-    if (!hutToggle.checked) return;
+  async function loadPois(col) {
+    if (!col.toggle.checked) return;
     const view = map.getBounds();
-    const withShelters = map.getZoom() >= HUT_SHELTER_MIN_ZOOM;
-    if (huts.loadedBounds && huts.loadedBounds.contains(view) && (!withShelters || huts.loadedShelters)) { renderHuts(); setStatus(""); return; }
+    const level = col.level(map.getZoom());
+    if (col.loadedBounds && col.loadedBounds.contains(view) && col.loadedLevel >= level) { renderPois(col); setStatus(""); return; }
+    if (col.inflight && col.inflight.bounds && col.inflight.bounds.contains(view) && col.inflight.level >= level) return; // en dekkende henting pågår alt
     const b = map.getZoom() <= 6 ? view.pad(0.1) : view.pad(0.4); // hent litt utenfor utsnittet, så små flytt ikke gir nye kall
     const bbox = `${b.getSouth().toFixed(4)},${b.getWest().toFixed(4)},${b.getNorth().toFixed(4)},${b.getEast().toFixed(4)}`;
-    const query = `[out:json][timeout:60];(
-      nwr["tourism"~"^(alpine_hut|wilderness_hut)$"](${bbox});
-      ${withShelters ? `nwr["amenity"="shelter"]["shelter_type"="basic_hut"](${bbox});` : ""}
-    );out center tags;`;
-    setStatus(map.getZoom() <= 7 ? "Henter turisthytter for et stort område, dette kan ta litt tid …" : "Henter turisthytter fra OpenStreetMap …");
-    const myRequest = (huts.inflight = {});
+    const query = `[out:json][timeout:60];(${col.query(bbox, level)});out center tags;`;
+    setStatus(map.getZoom() <= 7 ? `Henter ${col.label} for et stort område, dette kan ta litt tid …` : `Henter ${col.label} fra OpenStreetMap …`);
+    const myRequest = (col.inflight = { bounds: b, level });
     try {
       const data = await overpass(query);
-      if (huts.inflight !== myRequest) return; // et nyere kall har tatt over
-      huts.loadedBounds = b;
-      huts.loadedShelters = withShelters;
+      if (col.inflight !== myRequest) return; // et nyere kall har tatt over
+      col.inflight = null;
+      col.loadedBounds = b;
+      col.loadedLevel = level;
       for (const el of data.elements || []) {
         const key = `${el.type}/${el.id}`;
-        if (huts.byId.has(key)) continue;
+        if (col.byId.has(key)) continue;
         const lat = el.lat ?? (el.center && el.center.lat);
         const lon = el.lon ?? (el.center && el.center.lon);
         if (lat == null || lon == null) continue;
@@ -758,35 +803,40 @@
           title: h.tags.name || kind.label,
           icon: L.divIcon({
             className: "hut-icon", iconSize: [44, 44], iconAnchor: [22, 22], popupAnchor: [0, -20],
-            html: `<div class="hut-hit"><div class="hut-marker ${kind.cls}">${HUT_SVG}</div><span class="hut-label">${esc(h.tags.name || "")}</span></div>`,
+            html: `<div class="hut-hit"><div class="hut-marker ${kind.cls}">${kind.svg}</div><span class="hut-label">${esc(poiLabel(h))}</span></div>`,
           }),
         }).bindPopup(() => hutPopup(h), { maxWidth: 320 });
-        huts.byId.set(key, marker);
-        huts.data.set(key, h);
+        col.byId.set(key, marker);
+        col.data.set(key, h);
         hutsChanged = true;
       }
-      renderHuts();
-      setStatus(huts.byId.size ? "" : "Ingen hytter registrert i dette utsnittet");
-      if (!huts.byId.size) setTimeout(() => setStatus(""), 3000);
-      if (hutsChanged) { hutsChanged = false; if (typeof fillTripSelects === "function") fillTripSelects(); }
+      renderPois(col);
+      setStatus(col.byId.size ? "" : `Ingen ${col.label} registrert i dette utsnittet`);
+      if (!col.byId.size) setTimeout(() => setStatus(""), 3000);
+      if (hutsChanged) {
+        hutsChanged = false;
+        if (typeof fillTripSelects === "function") fillTripSelects();
+        onPoisLoaded();
+      }
     } catch (err) {
-      if (huts.inflight === myRequest) setStatus("Kunne ikke hente hytter: " + err.message, true);
+      if (col.inflight === myRequest) { col.inflight = null; setStatus(`Kunne ikke hente ${col.label}: ` + err.message, true); }
     }
   }
+  let onPoisLoaded = () => {}; // settes av 3D-delen
 
-  // Tegn hyttene i utsnittet; klump dem som ligger tett når kartet er zoomet ut
-  function renderHuts() {
-    hutLayer.clearLayers();
-    clusterLayer.clearLayers();
-    if (!hutToggle.checked) return;
+  // Tegn punktene i utsnittet; klump dem som ligger tett når kartet er zoomet ut
+  function renderPois(col) {
+    col.layer.clearLayers();
+    col.clusterLayer.clearLayers();
+    if (!col.toggle.checked) return;
     const zoom = map.getZoom();
     const bounds = map.getBounds().pad(0.2);
     const visible = [];
-    for (const [key, h] of huts.data) {
-      if (bounds.contains([h.lat, h.lon])) visible.push({ key, h, marker: huts.byId.get(key) });
+    for (const [key, h] of col.data) {
+      if (bounds.contains([h.lat, h.lon])) visible.push({ key, h, marker: col.byId.get(key) });
     }
-    if (zoom > HUT_CLUSTER_MAX_ZOOM || visible.length <= 1) {
-      visible.forEach((v) => v.marker.addTo(hutLayer));
+    if (zoom > CLUSTER_MAX_ZOOM || visible.length <= 1) {
+      visible.forEach((v) => v.marker.addTo(col.layer));
       applyTripClasses();
       return;
     }
@@ -798,45 +848,55 @@
       (cells.get(k) || cells.set(k, []).get(k)).push(v);
     }
     for (const group of cells.values()) {
-      if (group.length === 1) { group[0].marker.addTo(hutLayer); continue; }
+      if (group.length === 1) { group[0].marker.addTo(col.layer); continue; }
       const lat = group.reduce((a, v) => a + v.h.lat, 0) / group.length;
       const lon = group.reduce((a, v) => a + v.h.lon, 0) / group.length;
       const n = group.length;
-      const icon = L.divIcon({ className: "", iconSize: [46, 46], iconAnchor: [23, 23], html: `<div class="hut-cluster ${n >= 10 ? "big" : ""}" title="${n} hytter">${n}</div>` });
-      const cm = L.marker([lat, lon], { icon }).addTo(clusterLayer);
+      const icon = L.divIcon({ className: "", iconSize: [46, 46], iconAnchor: [23, 23], html: `<div class="hut-cluster ${col.clusterCls} ${n >= 10 ? "big" : ""}" title="${n} ${col.label}">${n}</div>` });
+      const cm = L.marker([lat, lon], { icon }).addTo(col.clusterLayer);
       cm.on("click", () => {
         const gb = L.latLngBounds(group.map((v) => [v.h.lat, v.h.lon]));
-        if (gb.getNorth() - gb.getSouth() < 0.002 && gb.getEast() - gb.getWest() < 0.004) map.setView(gb.getCenter(), HUT_CLUSTER_MAX_ZOOM + 1);
-        else map.fitBounds(gb.pad(0.3), { maxZoom: HUT_CLUSTER_MAX_ZOOM + 2 });
+        if (gb.getNorth() - gb.getSouth() < 0.002 && gb.getEast() - gb.getWest() < 0.004) map.setView(gb.getCenter(), CLUSTER_MAX_ZOOM + 1);
+        else map.fitBounds(gb.pad(0.3), { maxZoom: CLUSTER_MAX_ZOOM + 2 });
       });
     }
     applyTripClasses();
   }
 
   function applyTripClasses() {
-    for (const [key, marker] of huts.byId) {
-      const root = marker.getElement();
-      const el = root && root.querySelector(".hut-marker");
-      if (!el) continue;
-      el.classList.toggle("trip-start", !!trip.start && key === trip.start.key);
-      el.classList.toggle("trip-end", !!trip.end && key === trip.end.key);
+    for (const col of collections) {
+      for (const [key, marker] of col.byId) {
+        const root = marker.getElement();
+        const el = root && root.querySelector(".hut-marker");
+        if (!el) continue;
+        el.classList.toggle("trip-start", !!trip.start && key === trip.start.key);
+        el.classList.toggle("trip-end", !!trip.end && key === trip.end.key);
+      }
     }
   }
 
-  function scheduleHuts() {
-    clearTimeout(huts.timer);
-    huts.timer = setTimeout(loadHuts, 700);
+  let onOverlayToggle = () => {}; // settes av 3D-delen
+  for (const col of collections) {
+    col.toggle.addEventListener("change", () => {
+      if (col.toggle.checked) { map.addLayer(col.layer); map.addLayer(col.clusterLayer); loadPois(col); }
+      else { map.removeLayer(col.layer); map.removeLayer(col.clusterLayer); setStatus(""); }
+      onOverlayToggle();
+    });
   }
-  hutToggle.addEventListener("change", () => {
-    if (hutToggle.checked) { map.addLayer(hutLayer); map.addLayer(clusterLayer); loadHuts(); }
-    else { map.removeLayer(hutLayer); map.removeLayer(clusterLayer); setStatus(""); }
+  map.on("moveend", () => {
+    for (const col of collections) {
+      if (!col.toggle.checked) continue;
+      renderPois(col);
+      clearTimeout(col.timer);
+      col.timer = setTimeout(() => loadPois(col), 700);
+    }
   });
-  map.on("moveend", () => { if (hutToggle.checked) { renderHuts(); scheduleHuts(); } });
+  function loadHuts() { return loadPois(huts); }
 
   // ---------- 3D-visning (MapLibre GL JS med terreng) ----------
   const MAPLIBRE_VERSION = "4.7.1";
   const TERRAIN_TILES = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
-  const view3d = { active: false, map: null, markers: [], loaded: null };
+  const view3d = { active: false, map: null, markers: [], loaded: null, styleReady: false };
   const wrap3d = document.getElementById("map3d-wrap");
   const exaggerationInput = document.getElementById("exaggeration");
   const exaggerationValue = document.getElementById("exaggeration-value");
@@ -877,12 +937,7 @@
       sources[t.id] = { type: "raster", tileSize: 256, maxzoom: t.maxNativeZoom ?? t.maxZoom, tiles: [t.url], attribution: t.attribution.replace(/<[^>]+>/g, "") };
       layers.push({ id: t.id, type: "raster", source: t.id, paint: { "raster-opacity": t.opacity ?? 1 } });
     });
-    if (trailToggle.checked) {
-      sources.trails = trailSource.value === "osm"
-        ? { type: "raster", tileSize: 256, tiles: ["https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png"], attribution: "Waymarked Trails · © OpenStreetMap-bidragsytere" }
-        : { type: "raster", tileSize: 256, tiles: ["https://wms.geonorge.no/skwms1/wms.friluftsruter2?service=WMS&request=GetMap&version=1.1.1&layers=fotrute,skiloype,sykkelrute,annenrute&styles=&format=image/png&transparent=true&srs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}"], attribution: "Kartverket, tur- og friluftsruter" };
-      layers.push({ id: "trails", type: "raster", source: "trails", paint: { "raster-opacity": 0.85 } });
-    }
+    // Stier, hytter og turmål legges på etter lasting av sync3dOverlays()
     return { version: 8, sources, layers, terrain: { source: "terrain", exaggeration: Number(exaggerationInput.value) } };
   }
 
@@ -897,7 +952,7 @@
     });
   }
 
-  onBasemapChange = () => { if (view3d.map && view3d.map.loaded()) apply3dBasemap(); };
+  onBasemapChange = () => { if (view3d.map && view3d.styleReady) apply3dBasemap(); };
   onBlendChange = (opacity) => { if (view3d.map && view3d.map.getLayer("kart")) view3d.map.setPaintProperty("kart", "raster-opacity", opacity); };
 
   // Gjenbruk Leaflet-markører (vær og hytter) som MapLibre-markører med samme popup
@@ -922,18 +977,46 @@
     });
   }
 
-  function addHuts3d() {
-    // Hytter i 3D-utsnittet (også de som var klumpet i 2D), begrenset for ytelse
+  function addPois3d(col) {
+    // Punkter i 3D-utsnittet (også de som var klumpet i 2D), begrenset for ytelse
     const b = view3d.map.getBounds();
     let n = 0;
-    for (const [key, marker] of huts.byId) {
+    for (const [, marker] of col.byId) {
       const ll = marker.getLatLng();
       if (!b.contains([ll.lng, ll.lat])) continue;
       if (++n > 300) break;
-      const tmp = L.layerGroup([marker]);
-      addMarkers3d(tmp);
+      addMarkers3d(L.layerGroup([marker]));
     }
   }
+  function trailSource3d() {
+    return trailSource.value === "osm"
+      ? { type: "raster", tileSize: 256, tiles: ["https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png"], attribution: "Waymarked Trails · © OpenStreetMap-bidragsytere" }
+      : { type: "raster", tileSize: 256, tiles: ["https://wms.geonorge.no/skwms1/wms.friluftsruter2?service=WMS&request=GetMap&version=1.1.1&layers=fotrute,skiloype,sykkelrute,annenrute&styles=&format=image/png&transparent=true&srs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}"], attribution: "Kartverket, tur- og friluftsruter" };
+  }
+  // Speil av/på-valgene for vær, hytter, turmål og stier inn i et åpent 3D-kart
+  function sync3dMarkers() {
+    const m3 = view3d.map;
+    if (!m3 || !view3d.styleReady) return; // m3.loaded() krever også at alle fliser er lastet, så den duger ikke her
+    view3d.markers.forEach((mk) => mk.remove());
+    view3d.markers = [];
+    if (document.getElementById("toggle-weather").checked) addMarkers3d(weatherLayer);
+    for (const col of collections) if (col.toggle.checked) addPois3d(col);
+  }
+  function sync3dOverlays() {
+    const m3 = view3d.map;
+    if (!m3 || !view3d.styleReady) return;
+    if (m3.getLayer("trails")) { m3.removeLayer("trails"); m3.removeSource("trails"); }
+    if (trailToggle.checked) {
+      m3.addSource("trails", trailSource3d());
+      m3.addLayer({ id: "trails", type: "raster", source: "trails", paint: { "raster-opacity": 0.85 } }, m3.getLayer("route-casing") ? "route-casing" : undefined);
+    }
+    sync3dMarkers();
+  }
+  onOverlayToggle = () => sync3dMarkers();
+  onPoisLoaded = () => { if (view3d.active) sync3dMarkers(); };
+  trailToggle.addEventListener("change", sync3dOverlays);
+  trailSource.addEventListener("change", () => { if (trailToggle.checked) sync3dOverlays(); });
+  document.getElementById("toggle-weather").addEventListener("change", sync3dMarkers);
   function update3dZoom() {
     if (!view3d.map) return;
     document.getElementById("zoom3d").textContent = `Zoom ${(view3d.map.getZoom() + 1).toFixed(1).replace(".", ",")}`;
@@ -973,12 +1056,13 @@
     const m3 = view3d.map;
     m3.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     m3.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-left");
+    view3d.styleReady = false;
     m3.on("load", () => {
+      view3d.styleReady = true;
       if (typeof m3.setSky === "function") {
         m3.setSky({ "sky-color": "#9fc7ff", "horizon-color": "#e8f1ff", "fog-color": "#ffffff", "sky-horizon-blend": 0.6, "horizon-fog-blend": 0.8, "fog-ground-blend": 0.6 });
       }
-      if (map.hasLayer(weatherLayer)) addMarkers3d(weatherLayer);
-      if (hutToggle.checked) addHuts3d();
+      sync3dOverlays();
       update3dZoom();
     });
     m3.on("error", (e) => {
@@ -989,8 +1073,19 @@
     });
     m3.once("load", () => setStatus3d(""));
     m3.on("zoom", update3dZoom);
+    let syncTimer = null;
+    m3.on("moveend", () => {
+      if (fly.playing) return;
+      clearTimeout(syncTimer);
+      syncTimer = setTimeout(() => {
+        if (!view3d.active) return;
+        const c = m3.getCenter();
+        map.setView([c.lat, c.lng], Math.round(m3.getZoom() + 1), { animate: false }); // utløser henting av hytter og turmål for utsnittet
+        sync3dMarkers(); // vis punktene som alt er lastet for det nye utsnittet
+      }, 600);
+    });
     setStatus3d("Bygger 3D-kart …");
-    return new Promise((resolve) => (m3.loaded() ? resolve(m3) : m3.once("load", () => resolve(m3))));
+    return new Promise((resolve) => (view3d.styleReady ? resolve(m3) : m3.once("load", () => resolve(m3))));
   }
 
   function close3d() {
@@ -1002,6 +1097,7 @@
     view3d.markers = [];
     m3.remove();
     view3d.map = null;
+    view3d.styleReady = false;
     view3d.active = false;
     wrap3d.hidden = true;
     map.setView([c.lat, c.lng], Math.round(m3.getZoom() + 1));
@@ -1042,7 +1138,6 @@
   function fmtKm(m) { return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1).replace(".", ",")} km`; }
   function fmtTime(sec) { const h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60); return h ? `${h} t ${m} min` : `${m} min`; }
 
-  function hutName(h) { return h.tags.name || h.tags["name:no"] || hutKind(h.tags).label; }
 
   // Rute: { coords: [[lon,lat,ele?],...], cum: [m,...], length, ascent, descent, time, source }
   function buildRoute(coords, source) {
@@ -1080,20 +1175,24 @@
   function fillTripSelects() {
     const bounds = map.getBounds();
     const chosen = new Set([trip.start && trip.start.key, trip.end && trip.end.key].filter(Boolean));
-    const list = [...huts.data.entries()]
+    const listFor = (col) => [...col.data.entries()]
       .filter(([key, h]) => chosen.has(key) || bounds.contains([h.lat, h.lon]))
-      .map(([key, h]) => ({ key, name: hutName(h), kind: hutKind(h.tags).label }))
+      .map(([key, h]) => ({ key, name: hutName(h), kind: hutKind(h.tags).label, ele: h.tags.ele }))
       .sort((a, b) => a.name.localeCompare(b.name, "nb"))
       .slice(0, 400);
-    for (const [sel, placeholder] of [[tripFromSelect, "Velg starthytte …"], [tripToSelect, "Velg målhytte …"]]) {
+    const hutList = listFor(huts), peakList = listFor(peaks);
+    const opts = (list) => list.map((h) => `<option value="${esc(h.key)}">${esc(h.name)}${h.ele ? ` ${Math.round(Number(h.ele))} moh.` : ""} (${esc(h.kind.toLowerCase())})</option>`).join("");
+    for (const [sel, placeholder] of [[tripFromSelect, "Velg start …"], [tripToSelect, "Velg mål …"]]) {
       const current = sel.value;
       sel.innerHTML = `<option value="">${placeholder}</option>` +
-        list.map((h) => `<option value="${esc(h.key)}">${esc(h.name)} (${esc(h.kind.toLowerCase())})</option>`).join("");
+        (hutList.length ? `<optgroup label="Turisthytter">${opts(hutList)}</optgroup>` : "") +
+        (peakList.length ? `<optgroup label="Turmål">${opts(peakList)}</optgroup>` : "");
       sel.value = current;
     }
-    document.getElementById("trip-hint").textContent = list.length
-      ? `${list.length} ${list.length === 1 ? "hytte" : "hytter"} i utsnittet. Du kan også trykke på en hytte i kartet.`
-      : "Slå på Turisthytter og zoom inn, så fylles listene med hyttene i utsnittet.";
+    const total = hutList.length + peakList.length;
+    document.getElementById("trip-hint").textContent = total
+      ? `${hutList.length} hytter og ${peakList.length} turmål i utsnittet. Du kan også trykke på et punkt i kartet.`
+      : "Slå på Turisthytter eller Turmål og zoom inn, så fylles listene med punktene i utsnittet.";
   }
 
   function renderTrip() {
@@ -1135,7 +1234,7 @@
   }
 
   window.__tripSet = (role, key) => {
-    const h = huts.data.get(key);
+    const h = getPoi(key);
     if (!h) return;
     trip[role] = { ...h, key };
     trip.open = true;
@@ -1152,6 +1251,7 @@
   document.getElementById("trip-btn").addEventListener("click", () => {
     trip.open = true;
     if (!hutToggle.checked) { hutToggle.checked = true; hutToggle.dispatchEvent(new Event("change")); }
+    if (!peaks.toggle.checked) { peaks.toggle.checked = true; peaks.toggle.dispatchEvent(new Event("change")); }
     fillTripSelects();
     renderTrip();
   });
