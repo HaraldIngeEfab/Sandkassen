@@ -770,7 +770,18 @@
     map.closePopup();
     setStatus("Laster 3D-kart …");
     try { await loadMapLibre(); } catch (err) { setStatus(err.message, true); return; }
-    setStatus("");
+    try {
+      open3dMap();
+      setStatus("");
+    } catch (err) {
+      console.error(err);
+      view3d.active = false;
+      wrap3d.hidden = true;
+      setStatus("3D-kartet kunne ikke startes: " + err.message, true);
+    }
+  }
+
+  function open3dMap() {
     view3d.active = true;
     wrap3d.hidden = false;
     const c = map.getCenter();
@@ -795,8 +806,12 @@
     });
     m3.on("error", (e) => {
       const msg = e && e.error && e.error.message ? e.error.message : "";
+      console.warn("MapLibre:", msg);
       if (/terrarium|elevation-tiles/.test(msg)) setStatus3d("Fikk ikke lastet terrengdata", true);
+      else if (/WebGL/i.test(msg)) setStatus3d("Nettleseren kunne ikke starte WebGL, som 3D-kartet trenger", true);
     });
+    m3.once("load", () => setStatus3d(""));
+    setStatus3d("Bygger 3D-kart …");
   }
 
   function close3d() {
