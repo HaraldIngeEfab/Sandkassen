@@ -100,7 +100,7 @@
 
   // Bilde med fallback-kjede: MET-ikon -> GitHub-ikon -> emoji
   function iconHtml(code, cls) {
-    if (!code) return `<span class="emoji ${cls || ""}">🌡️</span>`;
+    if (!code) return `<span class="emoji ${cls || ""}" data-code="">🌡️</span>`;
     const first = ICON_SOURCES[0](code);
     return `<img class="${cls || ""}" src="${esc(first)}" alt="${esc(code)}" data-code="${esc(code)}" data-step="0" onerror="window.__wxIconError(this)">`;
   }
@@ -113,6 +113,7 @@
     } else {
       const span = document.createElement("span");
       span.className = "emoji " + img.className;
+      span.dataset.code = code;
       span.textContent = emojiFor(code);
       img.replaceWith(span);
     }
@@ -297,7 +298,7 @@
     }
   }
 
-  map.on("click", (e) => showWeatherAt(e.latlng.lat, e.latlng.lng));
+  map.on("click", (e) => { if (!sim.active) showWeatherAt(e.latlng.lat, e.latlng.lng); });
 
   // ---------- Søk ----------
   const resultsEl = document.getElementById("results");
@@ -355,6 +356,200 @@
       (err) => setStatus("Fikk ikke posisjon: " + err.message, true),
       { timeout: 10000 }
     );
+  });
+
+  // ---------- Værsimulering for kartutsnittet ----------
+  const sim = {
+    layer: L.layerGroup(),
+    points: [],      // { lat, lon, series: Map<time, summary>, cell, marker }
+    times: [],       // felles tidsakse (ISO-strenger)
+    index: 0,
+    timer: null,
+    active: false,
+  };
+  const simPanel = document.getElementById("sim-panel");
+  const simSlider = document.getElementById("sim-slider");
+  const simTime = document.getElementById("sim-time");
+  const simPlay = document.getElementById("sim-play");
+  const simSpeed = document.getElementById("sim-speed");
+
+  // Temperatur -> farge (samme skala som legenden)
+  const TEMP_STOPS = [
+    [-20, [59, 76, 192]], [0, [159, 199, 255]], [0.01, [234, 243, 255]],
+    [10, [124, 207, 107]], [20, [245, 212, 66]], [30, [215, 48, 31]],
+  ];
+  function tempColor(t) {
+    if (t == null || isNaN(t)) return "#999";
+    if (t <= TEMP_STOPS[0][0]) return rgb(TEMP_STOPS[0][1]);
+    for (let i = 1; i < TEMP_STOPS.length; i++) {
+      const [t0, c0] = TEMP_STOPS[i - 1], [t1, c1] = TEMP_STOPS[i];
+      if (t <= t1) {
+        const f = (t - t0) / (t1 - t0);
+        return rgb(c0.map((v, k) => Math.round(v + (c1[k] - v) * f)));
+      }
+    }
+    return rgb(TEMP_STOPS[TEMP_STOPS.length - 1][1]);
+  }
+  function rgb(c) { return `rgb(${c[0]},${c[1]},${c[2]})`; }
+
+  // Velg et rutenett som dekker utsnittet, maks ~20 punkter (skånsomt mot api.met.no)
+  function gridForBounds(bounds) {
+    const size = map.getSize();
+    const aspect = size.x / Math.max(size.y, 1);
+    let cols = Math.max(2, Math.min(6, Math.round(Math.sqrt(20 * aspect))));
+    let rows = Math.max(2, Math.min(6, Math.round(20 / cols)));
+    const south = bounds.getSouth(), north = bounds.getNorth();
+    const west = bounds.getWest(), east = bounds.getEast();
+    const dLat = (north - south) / rows, dLon = (east - west) / cols;
+    const pts = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        pts.push({
+          lat: south + dLat * (r + 0.5),
+          lon: west + dLon * (c + 0.5),
+          bounds: [[south + dLat * r, west + dLon * c], [south + dLat * (r + 1), west + dLon * (c + 1)]],
+        });
+      }
+    }
+    return pts;
+  }
+
+  function seriesOf(fc) {
+    const m = new Map();
+    for (const t of fc.properties.timeseries || []) m.set(t.time, summarize(t));
+    return m;
+  }
+
+  function simLabel(iso) {
+    const d = new Date(iso);
+    const day = d.toLocaleDateString("nb-NO", { weekday: "long", day: "numeric", month: "short" });
+    const hh = d.toLocaleTimeString("nb-NO", { hour: "2-digit", minute: "2-digit" });
+    const hoursAhead = Math.round((d.getTime() - Date.now()) / 36e5);
+    const rel = hoursAhead <= 0 ? "nå" : hoursAhead < 24 ? `om ${hoursAhead} t` : `om ${Math.round(hoursAhead / 24)} d`;
+    return `${day.charAt(0).toUpperCase()}${day.slice(1)} kl. ${hh} (${rel})`;
+  }
+
+  function renderSimFrame(i) {
+    if (!sim.times.length) return;
+    sim.index = Math.max(0, Math.min(sim.times.length - 1, i));
+    const time = sim.times[sim.index];
+    simSlider.value = String(sim.index);
+    simTime.textContent = simLabel(time);
+    for (const p of sim.points) {
+      const s = p.series.get(time);
+      if (!s) continue;
+      const wet = s.precip != null && s.precip > 0.1;
+      p.cell.setStyle({
+        fillColor: tempColor(s.temp),
+        color: wet ? "#0b4fa0" : "#ffffff",
+        weight: wet ? Math.min(4, 1 + s.precip) : 1,
+      });
+      const el = p.marker.getElement();
+      if (!el) continue;
+      const img = el.querySelector("img, .emoji");
+      if (img && img.dataset.code !== (s.symbol || "")) {
+        img.outerHTML = iconHtml(s.symbol);
+      }
+      el.querySelector(".t").textContent = fmt(s.temp, "°");
+      const wind = el.querySelector(".wind");
+      if (s.windDir != null && s.wind != null) {
+        wind.hidden = false;
+        wind.style.transform = `rotate(${Math.round(s.windDir + 90)}deg)`; // pilen peker dit vinden blåser
+        wind.style.opacity = String(Math.min(1, 0.35 + s.wind / 12));
+        wind.title = `${fmt(s.wind, " m/s")} fra ${compass(s.windDir)}`;
+      } else wind.hidden = true;
+      el.querySelector(".precip").textContent = wet ? fmt(s.precip, " mm", 1) : "";
+    }
+  }
+
+  function simStop() {
+    clearInterval(sim.timer);
+    sim.timer = null;
+    simPlay.textContent = "▶";
+    simPlay.setAttribute("aria-label", "Spill av");
+  }
+  function simStart() {
+    if (!sim.times.length) return;
+    simStop();
+    if (sim.index >= sim.times.length - 1) sim.index = 0;
+    simPlay.textContent = "❚❚";
+    simPlay.setAttribute("aria-label", "Pause");
+    sim.timer = setInterval(() => {
+      if (sim.index >= sim.times.length - 1) return simStop();
+      renderSimFrame(sim.index + 1);
+    }, Number(simSpeed.value));
+  }
+
+  async function startSimulation() {
+    simStop();
+    sim.layer.clearLayers();
+    sim.points = []; sim.times = []; sim.index = 0;
+    sim.active = true;
+    map.addLayer(sim.layer);
+    simPanel.hidden = false;
+    simTime.textContent = "Henter varsler …";
+    map.closePopup();
+    if (map.hasLayer(weatherLayer)) map.removeLayer(weatherLayer); // mindre rot mens simuleringen vises
+
+    const grid = gridForBounds(map.getBounds());
+    setStatus(`Henter varsler for ${grid.length} punkter i utsnittet …`);
+    const failed = [];
+    for (let i = 0; i < grid.length; i += 4) {
+      await Promise.all(grid.slice(i, i + 4).map(async (g) => {
+        try {
+          const fc = await fetchForecast(g.lat, g.lon);
+          g.series = seriesOf(fc);
+        } catch (err) { failed.push(g); }
+      }));
+    }
+    const points = grid.filter((g) => g.series);
+    if (!points.length) {
+      setStatus("Fikk ikke hentet varsler for utsnittet: " + (failed.length ? "api.met.no svarte ikke" : "ukjent feil"), true);
+      closeSimulation();
+      return;
+    }
+    // Felles tidsakse: tidspunkter som finnes hos alle punkter, fra nå og 3 døgn fram
+    const limit = Date.now() + 3 * 24 * 3600e3;
+    const first = points[0].series;
+    sim.times = [...first.keys()].filter((t) => {
+      const ms = new Date(t).getTime();
+      return ms >= Date.now() - 3600e3 && ms <= limit && points.every((p) => p.series.has(t));
+    });
+    for (const g of points) {
+      g.cell = L.rectangle(g.bounds, { className: "sim-cell", fillOpacity: 0.45, weight: 1, color: "#fff", interactive: false }).addTo(sim.layer);
+      g.marker = L.marker([g.lat, g.lon], {
+        interactive: false,
+        icon: L.divIcon({ className: "", iconSize: null, html: `<div class="sim-marker">${iconHtml("")}<span class="t">–</span><span class="wind" hidden>➤</span><span class="precip"></span></div>` }),
+      }).addTo(sim.layer);
+    }
+    sim.points = points;
+    simSlider.max = String(Math.max(0, sim.times.length - 1));
+    setStatus(failed.length ? `${failed.length} av ${grid.length} punkter feilet` : "", !!failed.length);
+    renderSimFrame(0);
+    simStart();
+  }
+
+  function closeSimulation() {
+    simStop();
+    sim.active = false;
+    sim.layer.clearLayers();
+    map.removeLayer(sim.layer);
+    simPanel.hidden = true;
+    if (document.getElementById("toggle-weather").checked) map.addLayer(weatherLayer);
+  }
+
+  document.getElementById("sim-btn").addEventListener("click", startSimulation);
+  document.getElementById("sim-refresh").addEventListener("click", startSimulation);
+  document.getElementById("sim-close").addEventListener("click", closeSimulation);
+  simPlay.addEventListener("click", () => (sim.timer ? simStop() : simStart()));
+  simSlider.addEventListener("input", () => { simStop(); renderSimFrame(Number(simSlider.value)); });
+  simSpeed.addEventListener("change", () => { if (sim.timer) simStart(); });
+  document.addEventListener("keydown", (e) => {
+    if (!sim.active || e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+    if (e.key === " ") { e.preventDefault(); sim.timer ? simStop() : simStart(); }
+    else if (e.key === "ArrowRight") { simStop(); renderSimFrame(sim.index + 1); }
+    else if (e.key === "ArrowLeft") { simStop(); renderSimFrame(sim.index - 1); }
+    else if (e.key === "Escape") closeSimulation();
   });
 
   // ---------- Start ----------

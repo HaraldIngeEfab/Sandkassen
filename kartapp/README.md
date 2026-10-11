@@ -18,6 +18,11 @@ En enkel kartapp bygget på åpne norske datatjenester:
 - Søk etter stedsnavn, zoom til treffet og få værvarsel for stedet.
 - «Min posisjon» bruker nettleserens geolokasjon.
 - Popup viser nå-vær, vind, nedbør, fuktighet, trykk og de neste seks timene.
+- **Simuler vær i utsnittet**: henter varsler for et rutenett av inntil 20 punkter i det synlige
+  kartutsnittet og spiller av de neste tre døgnene time for time. Hver rute farges etter temperatur,
+  viser værsymbol, vindpil og nedbørsmengde, og får blå kant når det er nedbør. Tidslinjen kan dras,
+  farten kan endres, og mellomrom, piltaster og Esc styrer avspillingen. «Nytt utsnitt» henter på nytt
+  for der du har flyttet kartet.
 
 ## Kjøre
 
