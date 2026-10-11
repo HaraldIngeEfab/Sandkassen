@@ -32,6 +32,7 @@
       </label>
       <button type="button" id="locate-btn" title="Vis været der du er">Min posisjon</button>
       <button type="button" id="sim-btn" class="primary" title="Spill av varselet for de neste døgnene i kartutsnittet">Simuler vær i utsnittet</button>
+      <button type="button" id="btn-3d" title="Vis utsnittet i 3D med terreng">3D</button>
     </div>
   </header>
 
@@ -39,6 +40,16 @@
     <div id="map" role="application" aria-label="Kart"></div>
     <aside id="results" class="results" hidden></aside>
     <div id="status" class="status" hidden></div>
+
+    <div id="map3d-wrap" hidden>
+      <div id="map3d" role="application" aria-label="3D-kart"></div>
+      <div class="panel3d">
+        <button type="button" id="btn-2d">← Tilbake til 2D</button>
+        <label>Terreng <input type="range" id="exaggeration" min="1" max="3" step="0.25" value="1.5" aria-label="Terrengoverdrivelse"> <span id="exaggeration-value">1,5×</span></label>
+        <span class="hint3d">Dra med to fingre eller høyreklikk for å tilte og rotere</span>
+      </div>
+      <div id="status3d" class="status" hidden></div>
+    </div>
 
     <section id="sim-panel" class="sim-panel" hidden aria-label="Værsimulering">
       <div class="sim-row">
@@ -69,7 +80,8 @@
     Vær: <a href="https://api.met.no" target="_blank" rel="noopener">MET Norge / Yr</a>
     (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>) ·
     Hytter og stier: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap-bidragsytere</a>
-    via Overpass og <a href="https://hiking.waymarkedtrails.org" target="_blank" rel="noopener">Waymarked Trails</a>
+    via Overpass og <a href="https://hiking.waymarkedtrails.org" target="_blank" rel="noopener">Waymarked Trails</a> ·
+    Terreng i 3D: <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md" target="_blank" rel="noopener">AWS Terrain Tiles (Mapzen)</a>
   </footer>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

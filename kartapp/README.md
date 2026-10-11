@@ -11,6 +11,7 @@ En enkel kartapp bygget på åpne norske datatjenester:
 | Værvarsel | MET Norge / Yr, `api.met.no/weatherapi/locationforecast/2.0/compact` |
 | Turisthytter | OpenStreetMap via Overpass API (`tourism=alpine_hut`, `wilderness_hut`, enkle buer) |
 | Stier | Waymarked Trails (OSM-vandreruter som fliselag) eller Kartverkets WMS «Tur- og friluftsruter» |
+| 3D-terreng | AWS Terrain Tiles (Mapzen Terrarium, ca. 30 m oppløsning) vist med MapLibre GL JS |
 
 ## Funksjoner
 
@@ -22,6 +23,10 @@ En enkel kartapp bygget på åpne norske datatjenester:
 - **Turisthytter**: slå på laget og zoom inn til minst nivå 8. Hyttene i utsnittet hentes fra OpenStreetMap
   og vises med rød ring for betjente hytter, brun for selvbetjente og ubetjente, grønn for enkle buer.
   Popup viser operatør, senger, betaling, booking og lenker til nettside, UT.no og OSM, pluss «Vær her».
+- **3D**: knappen åpner samme utsnitt som 3D-kart med terreng. Kartverkets kartfliser draperes over
+  høydemodellen, og vær-, hytte- og stilagene som er slått på følger med. Tilt og roter med to fingre
+  på nettbrett eller høyreklikk og dra på PC. Glideren styrer hvor mye terrenget overdrives.
+  MapLibre lastes først når knappen brukes. «Tilbake til 2D» tar med seg posisjonen tilbake.
 - **Stier**: fliselag med vandreruter fra Waymarked Trails (OpenStreetMap), eller Kartverkets nasjonale
   database for tur- og friluftsruter som WMS. Kartverkets topografiske kart viser dessuten merkede stier
   når du zoomer langt inn.
@@ -60,4 +65,6 @@ eller ved å åpne `index.html` direkte). Da kalles `api.met.no` direkte fra net
 - Værdata: © MET Norge, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) / NLOD
 - Hytter og stier: © OpenStreetMap-bidragsytere, [ODbL](https://www.openstreetmap.org/copyright).
   Overpass API og Waymarked Trails er frivillig drevne tjenester, så vær nøktern med trafikken.
-- Leaflet lastes fra unpkg (BSD-2).
+- Terreng: [Mapzen / AWS Terrain Tiles](https://github.com/tilezen/joerd/blob/master/docs/attribution.md),
+  satt sammen av SRTM, EU-DEM og andre åpne kilder.
+- Leaflet og MapLibre GL JS lastes fra unpkg (BSD-2 og BSD-3).

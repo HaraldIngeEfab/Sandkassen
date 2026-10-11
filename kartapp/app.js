@@ -635,7 +635,6 @@
         </div>
       </div>`;
   }
-  window.__wxHere = (lat, lon, name) => showWeatherAt(lat, lon, name);
 
   async function loadHuts() {
     if (!hutToggle.checked) return;
@@ -687,6 +686,141 @@
     else { map.removeLayer(hutLayer); setStatus(""); }
   });
   map.on("moveend", () => { if (hutToggle.checked) scheduleHuts(); });
+
+  // ---------- 3D-visning (MapLibre GL JS med terreng) ----------
+  const MAPLIBRE_VERSION = "4.7.1";
+  const TERRAIN_TILES = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
+  const view3d = { active: false, map: null, markers: [], loaded: null };
+  const wrap3d = document.getElementById("map3d-wrap");
+  const exaggerationInput = document.getElementById("exaggeration");
+  const exaggerationValue = document.getElementById("exaggeration-value");
+  const status3d = document.getElementById("status3d");
+
+  function setStatus3d(text, isError) {
+    if (!text) { status3d.hidden = true; return; }
+    status3d.textContent = text;
+    status3d.classList.toggle("error", !!isError);
+    status3d.hidden = false;
+    if (isError) setTimeout(() => (status3d.hidden = true), 6000);
+  }
+
+  // MapLibre lastes først når 3D-knappen brukes, så 2D-kartet forblir lett
+  function loadMapLibre() {
+    if (window.maplibregl) return Promise.resolve();
+    if (view3d.loaded) return view3d.loaded;
+    view3d.loaded = new Promise((resolve, reject) => {
+      const base = `https://unpkg.com/maplibre-gl@${MAPLIBRE_VERSION}/dist/maplibre-gl`;
+      const link = document.createElement("link");
+      link.rel = "stylesheet"; link.href = `${base}.css`;
+      document.head.appendChild(link);
+      const script = document.createElement("script");
+      script.src = `${base}.js`;
+      script.onload = () => resolve();
+      script.onerror = () => { view3d.loaded = null; reject(new Error("Fikk ikke lastet MapLibre GL")); };
+      document.head.appendChild(script);
+    });
+    return view3d.loaded;
+  }
+
+  function style3d() {
+    const base = document.getElementById("basemap").value;
+    const sources = {
+      kartverket: {
+        type: "raster", tileSize: 256, maxzoom: 18,
+        tiles: [`https://cache.kartverket.no/v1/wmts/1.0.0/${base}/default/webmercator/{z}/{y}/{x}.png`],
+        attribution: "© Kartverket",
+      },
+      terrain: { type: "raster-dem", tiles: [TERRAIN_TILES], encoding: "terrarium", tileSize: 256, maxzoom: 15, attribution: "Terreng: Mapzen / AWS Terrain Tiles" },
+    };
+    const layers = [{ id: "kartverket", type: "raster", source: "kartverket" }];
+    if (trailToggle.checked) {
+      sources.trails = trailSource.value === "osm"
+        ? { type: "raster", tileSize: 256, tiles: ["https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png"], attribution: "Waymarked Trails · © OpenStreetMap-bidragsytere" }
+        : { type: "raster", tileSize: 256, tiles: ["https://wms.geonorge.no/skwms1/wms.friluftsruter2?service=WMS&request=GetMap&version=1.1.1&layers=fotrute,skiloype,sykkelrute,annenrute&styles=&format=image/png&transparent=true&srs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}"], attribution: "Kartverket, tur- og friluftsruter" };
+      layers.push({ id: "trails", type: "raster", source: "trails", paint: { "raster-opacity": 0.85 } });
+    }
+    return { version: 8, sources, layers, terrain: { source: "terrain", exaggeration: Number(exaggerationInput.value) } };
+  }
+
+  // Gjenbruk Leaflet-markører (vær og hytter) som MapLibre-markører med samme popup
+  function addMarkers3d(layerGroup) {
+    layerGroup.eachLayer((m) => {
+      if (!(m instanceof L.Marker)) return;
+      const ll = m.getLatLng();
+      const el = document.createElement("div");
+      el.innerHTML = m.getIcon().options.html || "";
+      const node = el.firstElementChild || el;
+      const marker = new maplibregl.Marker({ element: node, anchor: "center" }).setLngLat([ll.lng, ll.lat]);
+      const popup = m.getPopup();
+      if (popup) {
+        marker.setPopup(new maplibregl.Popup({ maxWidth: "320px", offset: 16 }).setHTML(""));
+        node.addEventListener("click", () => {
+          const content = popup.getContent();
+          marker.getPopup().setHTML(typeof content === "function" ? content(m) : String(content));
+        }, true);
+      }
+      marker.addTo(view3d.map);
+      view3d.markers.push(marker);
+    });
+  }
+
+  async function open3d() {
+    if (view3d.active) return;
+    if (sim.active) closeSimulation();
+    map.closePopup();
+    setStatus("Laster 3D-kart …");
+    try { await loadMapLibre(); } catch (err) { setStatus(err.message, true); return; }
+    setStatus("");
+    view3d.active = true;
+    wrap3d.hidden = false;
+    const c = map.getCenter();
+    view3d.map = new maplibregl.Map({
+      container: "map3d",
+      style: style3d(),
+      center: [c.lng, c.lat],
+      zoom: Math.max(map.getZoom() - 1, 1),
+      pitch: 60, bearing: 0, maxPitch: 80,
+      attributionControl: { compact: false },
+      maxZoom: 17,
+    });
+    const m3 = view3d.map;
+    m3.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+    m3.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-left");
+    m3.on("load", () => {
+      if (typeof m3.setSky === "function") {
+        m3.setSky({ "sky-color": "#9fc7ff", "horizon-color": "#e8f1ff", "fog-color": "#ffffff", "sky-horizon-blend": 0.6, "horizon-fog-blend": 0.8, "fog-ground-blend": 0.6 });
+      }
+      if (map.hasLayer(weatherLayer)) addMarkers3d(weatherLayer);
+      if (hutToggle.checked) addMarkers3d(hutLayer);
+    });
+    m3.on("error", (e) => {
+      const msg = e && e.error && e.error.message ? e.error.message : "";
+      if (/terrarium|elevation-tiles/.test(msg)) setStatus3d("Fikk ikke lastet terrengdata", true);
+    });
+  }
+
+  function close3d() {
+    if (!view3d.active) return;
+    const m3 = view3d.map;
+    const c = m3.getCenter();
+    view3d.markers.forEach((mk) => mk.remove());
+    view3d.markers = [];
+    m3.remove();
+    view3d.map = null;
+    view3d.active = false;
+    wrap3d.hidden = true;
+    map.setView([c.lat, c.lng], Math.round(m3.getZoom() + 1));
+  }
+
+  document.getElementById("btn-3d").addEventListener("click", open3d);
+  document.getElementById("btn-2d").addEventListener("click", close3d);
+  exaggerationInput.addEventListener("input", () => {
+    exaggerationValue.textContent = Number(exaggerationInput.value).toLocaleString("nb-NO") + "×";
+    if (view3d.map) view3d.map.setTerrain({ source: "terrain", exaggeration: Number(exaggerationInput.value) });
+  });
+  document.addEventListener("keydown", (e) => { if (view3d.active && e.key === "Escape") close3d(); });
+  // «Vær her» i en hyttepopup i 3D: gå tilbake til 2D og vis været der
+  window.__wxHere = (lat, lon, name) => { if (view3d.active) { close3d(); map.setView([lat, lon], Math.max(map.getZoom(), 10)); } showWeatherAt(lat, lon, name); };
 
   // ---------- Start ----------
   loadCityWeather();
