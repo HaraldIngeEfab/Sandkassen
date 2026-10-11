@@ -1,0 +1,128 @@
+:root {
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #5b6470;
+  --panel: #f5f7fa;
+  --border: #d5dbe3;
+  --accent: #0b5fff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14181e;
+    --fg: #e8ecf1;
+    --muted: #9aa5b3;
+    --panel: #1d232b;
+    --border: #2f3842;
+    --accent: #5b94ff;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  display: flex;
+  flex-direction: column;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.topbar h1 { font-size: 1.1rem; margin: 0 8px 0 0; }
+.search { display: flex; gap: 6px; flex: 1 1 260px; }
+.search input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 1rem;
+}
+button, select {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+button[type="submit"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+.controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; color: var(--muted); font-size: 0.95rem; }
+main { position: relative; flex: 1; min-height: 0; }
+#map { position: absolute; inset: 0; }
+.results {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 1000;
+  width: min(360px, calc(100% - 24px));
+  max-height: calc(100% - 24px);
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.15);
+}
+.results header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border); font-weight: 600; }
+.results header button { padding: 2px 8px; }
+.results ul { list-style: none; margin: 0; padding: 0; }
+.results li { padding: 8px 12px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.results li:hover { background: var(--panel); }
+.results li .type { color: var(--muted); font-size: 0.85rem; }
+.status {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  padding: 8px 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.9rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,.15);
+}
+.status.error { border-color: #c0392b; color: #c0392b; }
+.credits { padding: 6px 16px; font-size: 0.8rem; color: var(--muted); background: var(--panel); border-top: 1px solid var(--border); }
+.credits a { color: inherit; }
+
+/* Værmarkører */
+.weather-marker {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 2px;
+  background: rgba(255,255,255,.92);
+  border: 1px solid #c9d1dc;
+  border-radius: 999px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.25);
+  white-space: nowrap;
+  color: #111;
+  font-weight: 600;
+  font-size: 13px;
+}
+.weather-marker img, .weather-marker .emoji { width: 28px; height: 28px; display: block; font-size: 22px; line-height: 28px; text-align: center; }
+.weather-marker .name { font-weight: 400; color: #444; font-size: 11px; }
+
+/* Popup */
+.leaflet-popup-content { margin: 12px 14px; min-width: 220px; }
+.wx h3 { margin: 0 0 4px; font-size: 1rem; }
+.wx .sub { color: #666; font-size: 0.85rem; margin-bottom: 8px; }
+.wx .now { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.wx .now img, .wx .now .emoji { width: 48px; height: 48px; font-size: 40px; line-height: 48px; text-align: center; }
+.wx .temp { font-size: 1.8rem; font-weight: 700; }
+.wx table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+.wx td, .wx th { padding: 2px 4px; text-align: left; }
+.wx th { color: #666; font-weight: 500; }
+.wx .hours { margin-top: 8px; border-top: 1px solid #e3e3e3; padding-top: 6px; }
+.wx .hours td { text-align: center; padding: 2px 0; }
+.wx .hours img, .wx .hours .emoji { width: 26px; height: 26px; font-size: 20px; line-height: 26px; }
+.wx .updated { color: #888; font-size: 0.75rem; margin-top: 6px; }

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Norgeskart med vær</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Norgeskart med vær</h1>
+    <form id="search-form" class="search" autocomplete="off">
+      <input id="search-input" type="search" placeholder="Søk etter stedsnavn (Geonorge)…" aria-label="Søk etter stedsnavn">
+      <button type="submit">Søk</button>
+    </form>
+    <div class="controls">
+      <label><input type="checkbox" id="toggle-weather" checked> Vær på kartet (Yr)</label>
+      <label>Kart
+        <select id="basemap">
+          <option value="topo">Topografisk</option>
+          <option value="topograatone">Gråtone</option>
+          <option value="toporaster">Raster</option>
+        </select>
+      </label>
+      <button type="button" id="locate-btn" title="Vis været der du er">Min posisjon</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="map" role="application" aria-label="Kart"></div>
+    <aside id="results" class="results" hidden></aside>
+    <div id="status" class="status" hidden></div>
+  </main>
+
+  <footer class="credits">
+    Kart: <a href="https://www.kartverket.no" target="_blank" rel="noopener">© Kartverket</a> via Geonorge ·
+    Stedsnavn, kommune og høyde: <a href="https://ws.geonorge.no" target="_blank" rel="noopener">ws.geonorge.no</a> ·
+    Vær: <a href="https://api.met.no" target="_blank" rel="noopener">MET Norge / Yr</a>
+    (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>)
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
