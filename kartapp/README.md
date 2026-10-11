@@ -5,6 +5,7 @@ En enkel kartapp bygget på åpne norske datatjenester:
 | Hva | Tjeneste |
 |---|---|
 | Bakgrunnskart (topo, gråtone, raster) | Kartverkets cache-tjeneste via Geonorge (`cache.kartverket.no`) |
+| Satellitt | Esri World Imagery (Maxar m.fl.), Sentinel-2 cloudless fra EOX, og hybrid med Kartverkets gråtonekart oppå Esri |
 | Stedsnavnsøk | `ws.geonorge.no/stedsnavn/v1/navn` |
 | Kommune og fylke for et punkt | `ws.geonorge.no/kommuneinfo/v1/punkt` |
 | Høyde over havet for et punkt | `ws.geonorge.no/hoydedata/v1/punkt` |
@@ -68,6 +69,8 @@ eller ved å åpne `index.html` direkte). Da kalles `api.met.no` direkte fra net
 ## Lisenser
 
 - Kartdata: © Kartverket, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+- Satellitt: Esri World Imagery etter [Esris vilkår](https://www.esri.com/en-us/legal/terms/full-master-agreement)
+  med kreditering, og [Sentinel-2 cloudless](https://s2maps.eu) by EOX, CC BY-NC-SA 4.0 (ikke-kommersiell bruk).
 - Værdata: © MET Norge, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) / NLOD
 - Hytter og stier: © OpenStreetMap-bidragsytere, [ODbL](https://www.openstreetmap.org/copyright).
   Overpass API og Waymarked Trails er frivillig drevne tjenester, så vær nøktern med trafikken.

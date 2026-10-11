@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Norgeskart med vær</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
   <header class="topbar">
@@ -28,6 +28,9 @@
           <option value="topo">Topografisk</option>
           <option value="topograatone">Gråtone</option>
           <option value="toporaster">Raster</option>
+          <option value="esri">Satellitt (Esri)</option>
+          <option value="s2">Satellitt (Sentinel-2)</option>
+          <option value="hybrid">Hybrid: satellitt + kart</option>
         </select>
       </label>
       <button type="button" id="locate-btn" title="Vis været der du er">Min posisjon</button>
@@ -116,10 +119,12 @@
     (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>) ·
     Hytter og stier: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap-bidragsytere</a>
     via Overpass og <a href="https://hiking.waymarkedtrails.org" target="_blank" rel="noopener">Waymarked Trails</a> ·
-    Terreng i 3D: <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md" target="_blank" rel="noopener">AWS Terrain Tiles (Mapzen)</a>
+    Terreng i 3D: <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md" target="_blank" rel="noopener">AWS Terrain Tiles (Mapzen)</a> ·
+    Satellitt: <a href="https://www.esri.com" target="_blank" rel="noopener">Esri, Maxar, Earthstar Geographics</a> og
+    <a href="https://s2maps.eu" target="_blank" rel="noopener">Sentinel-2 cloudless by EOX</a> (CC BY-NC-SA 4.0)
   </footer>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>

@@ -37,16 +37,46 @@
   // ---------- Kart ----------
   const map = L.map("map", { zoomControl: true }).setView(NORWAY_CENTER, 5);
 
-  function kartverketLayer(layerName) {
-    return L.tileLayer(
-      `https://cache.kartverket.no/v1/wmts/1.0.0/${layerName}/default/webmercator/{z}/{y}/{x}.png`,
-      { maxZoom: 18, attribution: '&copy; <a href="https://www.kartverket.no">Kartverket</a>' }
-    );
+  // Bakgrunnskart: Kartverket (via Geonorge), Esri World Imagery, Sentinel-2 cloudless og hybrid
+  const KARTVERKET_ATTR = '&copy; <a href="https://www.kartverket.no">Kartverket</a>';
+  const ESRI_ATTR = 'Satellitt: Esri, Maxar, Earthstar Geographics, GIS User Community';
+  const S2_ATTR = '<a href="https://s2maps.eu">Sentinel-2 cloudless</a> by <a href="https://eox.at">EOX</a> (CC BY-NC-SA 4.0), Copernicus Sentinel data';
+  const TILESETS = {
+    kartverket: (name) => ({
+      url: `https://cache.kartverket.no/v1/wmts/1.0.0/${name}/default/webmercator/{z}/{y}/{x}.png`,
+      maxZoom: 18, attribution: KARTVERKET_ATTR,
+    }),
+    esri: {
+      url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      maxZoom: 19, attribution: ESRI_ATTR,
+    },
+    s2: {
+      url: "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2023_3857/default/g/{z}/{y}/{x}.jpg",
+      maxZoom: 18, maxNativeZoom: 16, attribution: S2_ATTR,
+    },
+  };
+  // Hvert bakgrunnsvalg er en liste av fliselag (nederst først), med valgfri gjennomsiktighet
+  const BASEMAPS = {
+    topo: () => [{ ...TILESETS.kartverket("topo") }],
+    topograatone: () => [{ ...TILESETS.kartverket("topograatone") }],
+    toporaster: () => [{ ...TILESETS.kartverket("toporaster") }],
+    esri: () => [{ ...TILESETS.esri }],
+    s2: () => [{ ...TILESETS.s2 }],
+    hybrid: () => [{ ...TILESETS.esri }, { ...TILESETS.kartverket("topograatone"), opacity: 0.55 }],
+  };
+  function basemapLayers(key) { return (BASEMAPS[key] || BASEMAPS.topo)(); }
+
+  function createBasemap(key) {
+    return L.layerGroup(basemapLayers(key).map((t) => L.tileLayer(t.url, {
+      maxZoom: 18, maxNativeZoom: t.maxNativeZoom ?? Math.min(t.maxZoom, 18), opacity: t.opacity ?? 1, attribution: t.attribution,
+    })));
   }
-  let baseLayer = kartverketLayer("topo").addTo(map);
-  document.getElementById("basemap").addEventListener("change", (e) => {
+  const basemapSelect = document.getElementById("basemap");
+  let baseLayer = createBasemap(basemapSelect.value).addTo(map);
+  basemapSelect.addEventListener("change", (e) => {
     map.removeLayer(baseLayer);
-    baseLayer = kartverketLayer(e.target.value).addTo(map);
+    baseLayer = createBasemap(e.target.value).addTo(map);
+    map.getContainer().classList.toggle("satellite", /^(esri|s2|hybrid)$/.test(e.target.value));
   });
 
   const weatherLayer = L.layerGroup().addTo(map);
@@ -742,16 +772,15 @@
   }
 
   function style3d() {
-    const base = document.getElementById("basemap").value;
     const sources = {
-      kartverket: {
-        type: "raster", tileSize: 256, maxzoom: 18,
-        tiles: [`https://cache.kartverket.no/v1/wmts/1.0.0/${base}/default/webmercator/{z}/{y}/{x}.png`],
-        attribution: "© Kartverket",
-      },
       terrain: { type: "raster-dem", tiles: [TERRAIN_TILES], encoding: "terrarium", tileSize: 256, maxzoom: 15, attribution: "Terreng: Mapzen / AWS Terrain Tiles" },
     };
-    const layers = [{ id: "kartverket", type: "raster", source: "kartverket" }];
+    const layers = [];
+    basemapLayers(basemapSelect.value).forEach((t, i) => {
+      const id = `base${i}`;
+      sources[id] = { type: "raster", tileSize: 256, maxzoom: t.maxNativeZoom ?? t.maxZoom, tiles: [t.url], attribution: t.attribution.replace(/<[^>]+>/g, "") };
+      layers.push({ id, type: "raster", source: id, paint: { "raster-opacity": t.opacity ?? 1 } });
+    });
     if (trailToggle.checked) {
       sources.trails = trailSource.value === "osm"
         ? { type: "raster", tileSize: 256, tiles: ["https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png"], attribution: "Waymarked Trails · © OpenStreetMap-bidragsytere" }

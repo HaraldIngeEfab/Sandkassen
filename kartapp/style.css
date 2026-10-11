@@ -275,3 +275,7 @@ main { position: relative; flex: 1; min-height: 0; }
 
 .trip-row select { flex: 1; min-width: 0; max-width: 100%; }
 .trip-hint { color: var(--muted); font-size: 0.8rem; }
+
+/* Markører og ruter på satellittbilde: litt kraftigere kontrast */
+#map.satellite .weather-marker { background: rgba(255,255,255,.96); }
+#map.satellite .hut-label { background: rgba(255,255,255,.96); }
