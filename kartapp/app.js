@@ -67,8 +67,9 @@
   function basemapLayers(key) { return (BASEMAPS[key] || BASEMAPS.topo)(); }
 
   function createBasemap(key) {
-    return L.layerGroup(basemapLayers(key).map((t) => L.tileLayer(t.url, {
+    return L.layerGroup(basemapLayers(key).map((t, i) => L.tileLayer(t.url, {
       maxZoom: 18, maxNativeZoom: t.maxNativeZoom ?? Math.min(t.maxZoom, 18), opacity: t.opacity ?? 1, attribution: t.attribution,
+      zIndex: 1 + i, // bakgrunn ligger alltid under sti-laget (zIndex 10)
     })));
   }
   const basemapSelect = document.getElementById("basemap");
@@ -78,6 +79,17 @@
     baseLayer = createBasemap(e.target.value).addTo(map);
     map.getContainer().classList.toggle("satellite", /^(esri|s2|hybrid)$/.test(e.target.value));
   });
+
+  // Zoomnivå og målestokk nede til venstre
+  L.control.scale({ metric: true, imperial: false, position: "bottomleft" }).addTo(map);
+  const zoomControl = L.control({ position: "bottomleft" });
+  zoomControl.onAdd = () => { const el = L.DomUtil.create("div", "zoom-indicator"); el.id = "zoom-indicator"; return el; };
+  zoomControl.addTo(map);
+  function updateZoomIndicator() {
+    document.getElementById("zoom-indicator").textContent = `Zoom ${map.getZoom().toFixed(1).replace(".", ",")}`;
+  }
+  map.on("zoom zoomend", updateZoomIndicator);
+  updateZoomIndicator();
 
   const weatherLayer = L.layerGroup().addTo(map);
   const searchLayer = L.layerGroup().addTo(map);
@@ -586,13 +598,13 @@
   const TRAIL_LAYERS = {
     // Vandreruter fra OpenStreetMap, tegnet av Waymarked Trails
     osm: () => L.tileLayer("https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png", {
-      maxZoom: 18, opacity: 0.85,
+      maxZoom: 18, opacity: 0.85, zIndex: 10,
       attribution: '<a href="https://hiking.waymarkedtrails.org">Waymarked Trails</a> · © OpenStreetMap-bidragsytere',
     }),
     // Nasjonal database for tur- og friluftsruter (Kartverket) som WMS
     kartverket: () => L.tileLayer.wms("https://wms.geonorge.no/skwms1/wms.friluftsruter2", {
       layers: "fotrute,skiloype,sykkelrute,annenrute",
-      format: "image/png", transparent: true, version: "1.3.0", opacity: 0.9,
+      format: "image/png", transparent: true, version: "1.3.0", opacity: 0.9, zIndex: 10,
       attribution: '<a href="https://kartkatalog.geonorge.no">Kartverket, tur- og friluftsruter</a>',
     }),
   };
@@ -610,7 +622,6 @@
 
   // ---------- Turisthytter fra OpenStreetMap (Overpass) ----------
   const OVERPASS_ENDPOINTS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
-  const HUT_MIN_ZOOM = 8;
   const hutLayer = L.layerGroup();
   const hutToggle = document.getElementById("toggle-huts");
   const huts = { loadedBounds: null, timer: null, inflight: null, byId: new Map(), data: new Map() };
@@ -679,24 +690,28 @@
   map.on("zoomend", updateZoomClasses);
   updateZoomClasses();
 
+  const HUT_SHELTER_MIN_ZOOM = 9;  // gapahuker og enkle buer er det svært mange av; hent dem bare innzoomet
+  const HUT_CLUSTER_MAX_ZOOM = 12; // over dette vises alle hytter enkeltvis
+  const clusterLayer = L.layerGroup();
+
   async function loadHuts() {
     if (!hutToggle.checked) return;
-    if (map.getZoom() < HUT_MIN_ZOOM) { setStatus("Zoom inn for å se turisthytter"); return; }
     const view = map.getBounds();
-    if (huts.loadedBounds && huts.loadedBounds.contains(view)) { setStatus(""); return; }
-    const b = view.pad(0.4); // hent litt utenfor utsnittet, så små flytt ikke gir nye kall
+    const withShelters = map.getZoom() >= HUT_SHELTER_MIN_ZOOM;
+    if (huts.loadedBounds && huts.loadedBounds.contains(view) && (!withShelters || huts.loadedShelters)) { renderHuts(); setStatus(""); return; }
+    const b = map.getZoom() <= 6 ? view.pad(0.1) : view.pad(0.4); // hent litt utenfor utsnittet, så små flytt ikke gir nye kall
     const bbox = `${b.getSouth().toFixed(4)},${b.getWest().toFixed(4)},${b.getNorth().toFixed(4)},${b.getEast().toFixed(4)}`;
-    const query = `[out:json][timeout:25];(
+    const query = `[out:json][timeout:60];(
       nwr["tourism"~"^(alpine_hut|wilderness_hut)$"](${bbox});
-      nwr["amenity"="shelter"]["shelter_type"="basic_hut"](${bbox});
+      ${withShelters ? `nwr["amenity"="shelter"]["shelter_type"="basic_hut"](${bbox});` : ""}
     );out center tags;`;
-    setStatus("Henter turisthytter fra OpenStreetMap …");
+    setStatus(map.getZoom() <= 7 ? "Henter turisthytter for et stort område, dette kan ta litt tid …" : "Henter turisthytter fra OpenStreetMap …");
     const myRequest = (huts.inflight = {});
     try {
       const data = await overpass(query);
       if (huts.inflight !== myRequest) return; // et nyere kall har tatt over
       huts.loadedBounds = b;
-      let added = 0;
+      huts.loadedShelters = withShelters;
       for (const el of data.elements || []) {
         const key = `${el.type}/${el.id}`;
         if (huts.byId.has(key)) continue;
@@ -712,17 +727,65 @@
             html: `<div class="hut-hit"><div class="hut-marker ${kind.cls}">${HUT_SVG}</div><span class="hut-label">${esc(h.tags.name || "")}</span></div>`,
           }),
         }).bindPopup(() => hutPopup(h), { maxWidth: 320 });
-        marker.addTo(hutLayer);
         huts.byId.set(key, marker);
         huts.data.set(key, h);
         hutsChanged = true;
-        added++;
       }
+      renderHuts();
       setStatus(huts.byId.size ? "" : "Ingen hytter registrert i dette utsnittet");
-      if (hutsChanged) { hutsChanged = false; if (typeof fillTripSelects === "function") fillTripSelects(); }
       if (!huts.byId.size) setTimeout(() => setStatus(""), 3000);
+      if (hutsChanged) { hutsChanged = false; if (typeof fillTripSelects === "function") fillTripSelects(); }
     } catch (err) {
       if (huts.inflight === myRequest) setStatus("Kunne ikke hente hytter: " + err.message, true);
+    }
+  }
+
+  // Tegn hyttene i utsnittet; klump dem som ligger tett når kartet er zoomet ut
+  function renderHuts() {
+    hutLayer.clearLayers();
+    clusterLayer.clearLayers();
+    if (!hutToggle.checked) return;
+    const zoom = map.getZoom();
+    const bounds = map.getBounds().pad(0.2);
+    const visible = [];
+    for (const [key, h] of huts.data) {
+      if (bounds.contains([h.lat, h.lon])) visible.push({ key, h, marker: huts.byId.get(key) });
+    }
+    if (zoom > HUT_CLUSTER_MAX_ZOOM || visible.length <= 1) {
+      visible.forEach((v) => v.marker.addTo(hutLayer));
+      applyTripClasses();
+      return;
+    }
+    const cell = 56; // piksler
+    const cells = new Map();
+    for (const v of visible) {
+      const p = map.project([v.h.lat, v.h.lon], zoom);
+      const k = `${Math.floor(p.x / cell)}:${Math.floor(p.y / cell)}`;
+      (cells.get(k) || cells.set(k, []).get(k)).push(v);
+    }
+    for (const group of cells.values()) {
+      if (group.length === 1) { group[0].marker.addTo(hutLayer); continue; }
+      const lat = group.reduce((a, v) => a + v.h.lat, 0) / group.length;
+      const lon = group.reduce((a, v) => a + v.h.lon, 0) / group.length;
+      const n = group.length;
+      const icon = L.divIcon({ className: "", iconSize: [46, 46], iconAnchor: [23, 23], html: `<div class="hut-cluster ${n >= 10 ? "big" : ""}" title="${n} hytter">${n}</div>` });
+      const cm = L.marker([lat, lon], { icon }).addTo(clusterLayer);
+      cm.on("click", () => {
+        const gb = L.latLngBounds(group.map((v) => [v.h.lat, v.h.lon]));
+        if (gb.getNorth() - gb.getSouth() < 0.002 && gb.getEast() - gb.getWest() < 0.004) map.setView(gb.getCenter(), HUT_CLUSTER_MAX_ZOOM + 1);
+        else map.fitBounds(gb.pad(0.3), { maxZoom: HUT_CLUSTER_MAX_ZOOM + 2 });
+      });
+    }
+    applyTripClasses();
+  }
+
+  function applyTripClasses() {
+    for (const [key, marker] of huts.byId) {
+      const root = marker.getElement();
+      const el = root && root.querySelector(".hut-marker");
+      if (!el) continue;
+      el.classList.toggle("trip-start", !!trip.start && key === trip.start.key);
+      el.classList.toggle("trip-end", !!trip.end && key === trip.end.key);
     }
   }
 
@@ -731,10 +794,10 @@
     huts.timer = setTimeout(loadHuts, 700);
   }
   hutToggle.addEventListener("change", () => {
-    if (hutToggle.checked) { map.addLayer(hutLayer); loadHuts(); }
-    else { map.removeLayer(hutLayer); setStatus(""); }
+    if (hutToggle.checked) { map.addLayer(hutLayer); map.addLayer(clusterLayer); loadHuts(); }
+    else { map.removeLayer(hutLayer); map.removeLayer(clusterLayer); setStatus(""); }
   });
-  map.on("moveend", () => { if (hutToggle.checked) scheduleHuts(); });
+  map.on("moveend", () => { if (hutToggle.checked) { renderHuts(); scheduleHuts(); } });
 
   // ---------- 3D-visning (MapLibre GL JS med terreng) ----------
   const MAPLIBRE_VERSION = "4.7.1";
@@ -812,6 +875,23 @@
     });
   }
 
+  function addHuts3d() {
+    // Hytter i 3D-utsnittet (også de som var klumpet i 2D), begrenset for ytelse
+    const b = view3d.map.getBounds();
+    let n = 0;
+    for (const [key, marker] of huts.byId) {
+      const ll = marker.getLatLng();
+      if (!b.contains([ll.lng, ll.lat])) continue;
+      if (++n > 300) break;
+      const tmp = L.layerGroup([marker]);
+      addMarkers3d(tmp);
+    }
+  }
+  function update3dZoom() {
+    if (!view3d.map) return;
+    document.getElementById("zoom3d").textContent = `Zoom ${(view3d.map.getZoom() + 1).toFixed(1).replace(".", ",")}`;
+  }
+
   async function open3d() {
     if (view3d.active) return view3d.map;
     if (sim.active) closeSimulation();
@@ -851,7 +931,8 @@
         m3.setSky({ "sky-color": "#9fc7ff", "horizon-color": "#e8f1ff", "fog-color": "#ffffff", "sky-horizon-blend": 0.6, "horizon-fog-blend": 0.8, "fog-ground-blend": 0.6 });
       }
       if (map.hasLayer(weatherLayer)) addMarkers3d(weatherLayer);
-      if (hutToggle.checked) addMarkers3d(hutLayer);
+      if (hutToggle.checked) addHuts3d();
+      update3dZoom();
     });
     m3.on("error", (e) => {
       const msg = e && e.error && e.error.message ? e.error.message : "";
@@ -860,6 +941,7 @@
       else if (/WebGL/i.test(msg)) setStatus3d("Nettleseren kunne ikke starte WebGL, som 3D-kartet trenger", true);
     });
     m3.once("load", () => setStatus3d(""));
+    m3.on("zoom", update3dZoom);
     setStatus3d("Bygger 3D-kart …");
     return new Promise((resolve) => (m3.loaded() ? resolve(m3) : m3.once("load", () => resolve(m3))));
   }
@@ -949,9 +1031,13 @@
   }
 
   function fillTripSelects() {
+    const bounds = map.getBounds();
+    const chosen = new Set([trip.start && trip.start.key, trip.end && trip.end.key].filter(Boolean));
     const list = [...huts.data.entries()]
+      .filter(([key, h]) => chosen.has(key) || bounds.contains([h.lat, h.lon]))
       .map(([key, h]) => ({ key, name: hutName(h), kind: hutKind(h.tags).label }))
-      .sort((a, b) => a.name.localeCompare(b.name, "nb"));
+      .sort((a, b) => a.name.localeCompare(b.name, "nb"))
+      .slice(0, 400);
     for (const [sel, placeholder] of [[tripFromSelect, "Velg starthytte …"], [tripToSelect, "Velg målhytte …"]]) {
       const current = sel.value;
       sel.innerHTML = `<option value="">${placeholder}</option>` +
@@ -959,7 +1045,7 @@
       sel.value = current;
     }
     document.getElementById("trip-hint").textContent = list.length
-      ? `${list.length} hytter i utsnittet. Du kan også trykke på en hytte i kartet.`
+      ? `${list.length} ${list.length === 1 ? "hytte" : "hytter"} i utsnittet. Du kan også trykke på en hytte i kartet.`
       : "Slå på Turisthytter og zoom inn, så fylles listene med hyttene i utsnittet.";
   }
 
@@ -967,12 +1053,7 @@
     tripPanel.hidden = !(trip.open || trip.start || trip.end);
     tripFromSelect.value = trip.start ? trip.start.key : "";
     tripToSelect.value = trip.end ? trip.end.key : "";
-    for (const [key, marker] of huts.byId) {
-      const el = marker.getElement() && marker.getElement().querySelector(".hut-marker");
-      if (!el) continue;
-      el.classList.toggle("trip-start", !!trip.start && key === trip.start.key);
-      el.classList.toggle("trip-end", !!trip.end && key === trip.end.key);
-    }
+    applyTripClasses();
     const r = trip.route;
     if (r) {
       tripStats.innerHTML =

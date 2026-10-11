@@ -22,8 +22,11 @@ En enkel kartapp bygget på åpne norske datatjenester:
   Høyden sendes med til Yr for mer presis temperatur i fjellet.
 - Søk etter stedsnavn, zoom til treffet og få værvarsel for stedet.
 - «Min posisjon» bruker nettleserens geolokasjon.
-- **Turisthytter**: slå på laget og zoom inn til minst nivå 8. Hyttene i utsnittet hentes fra OpenStreetMap
-  og vises med rød ring for betjente hytter, brun for selvbetjente og ubetjente, grønn for enkle buer.
+- Zoomnivå og målestokk vises nede til venstre, og zoomnivå også i 3D-panelet.
+- **Turisthytter**: hentes fra OpenStreetMap for utsnittet på alle zoomnivåer. Utzoomet klumpes hytter
+  som ligger tett sammen i sirkler med antall, trykk på en klump for å zoome inn på den. Enkle buer og
+  gapahuker hentes først fra zoomnivå 9, siden det er svært mange av dem. Rød er betjent, brun er
+  selvbetjent eller ubetjent, grønn er enkel bu.
   Popup viser operatør, senger, betaling, booking og lenker til nettside, UT.no og OSM, pluss «Vær her».
 - **3D**: knappen åpner samme utsnitt som 3D-kart med terreng. Kartverkets kartfliser draperes over
   høydemodellen, og vær-, hytte- og stilagene som er slått på følger med. Tilt og roter med to fingre
