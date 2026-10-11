@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Norgeskart med vær</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=7">
+  <link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
   <header class="topbar">
@@ -33,6 +33,7 @@
       <button type="button" id="locate-btn" title="Vis været der du er">Min posisjon</button>
       <button type="button" id="sim-btn" class="primary" title="Spill av varselet for de neste døgnene i kartutsnittet">Simuler vær i utsnittet</button>
       <button type="button" id="btn-3d" title="Vis utsnittet i 3D med terreng">3D</button>
+      <button type="button" id="trip-btn" title="Planlegg tur mellom to hytter">Planlegg tur</button>
     </div>
   </header>
 
@@ -44,8 +45,9 @@
     <aside id="trip-panel" class="trip-panel" hidden aria-label="Tur mellom hytter">
       <header><span>Tur mellom hytter</span><button type="button" id="trip-reset" title="Nullstill tur">×</button></header>
       <div class="trip-body">
-        <div class="trip-row"><span class="trip-label">Fra</span><span id="trip-from">Velg starthytte i en hyttepopup</span></div>
-        <div class="trip-row"><span class="trip-label">Til</span><span id="trip-to">Velg målhytte i en hyttepopup</span></div>
+        <div class="trip-row"><label class="trip-label" for="trip-from-select">Fra</label><select id="trip-from-select"><option value="">Velg starthytte …</option></select></div>
+        <div class="trip-row"><label class="trip-label" for="trip-to-select">Til</label><select id="trip-to-select"><option value="">Velg målhytte …</option></select></div>
+        <div id="trip-hint" class="trip-hint">Listene viser hyttene som er lastet i kartutsnittet. Du kan også trykke på en hytte i kartet.</div>
         <div id="trip-stats" class="trip-stats"></div>
         <div class="trip-actions">
           <button type="button" id="trip-fly" class="primary" disabled>Fly turen i 3D</button>
@@ -118,6 +120,6 @@
   </footer>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>

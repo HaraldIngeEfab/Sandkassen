@@ -170,23 +170,43 @@ main { position: relative; flex: 1; min-height: 0; }
 @media (prefers-reduced-motion: reduce) { .sim-marker .wind, .sim-cell { transition: none; } }
 
 /* Turisthytter */
-.hut-marker {
-  width: 26px; height: 26px; margin-left: -13px; margin-top: -13px;
-  display: flex; align-items: center; justify-content: center;
-  background: #fff; border: 2px solid var(--hut, #8a3b12); border-radius: 50%;
-  box-shadow: 0 1px 4px rgba(0,0,0,.3);
+.hut-hit { /* plass til sirkel og navnelapp; bare sirkelen fanger trykk, så nabohytter ikke dekker hverandre */
+  width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; position: relative;
+  pointer-events: none;
 }
-.hut-marker svg { width: 16px; height: 16px; fill: var(--hut, #8a3b12); }
+.hut-icon { pointer-events: none !important; }
+.hut-marker { pointer-events: auto; cursor: pointer; }
+.hut-marker:active { transform: scale(1.1); }
+.hut-marker {
+  --hut: #8a3b12;
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--hut); border: 3px solid #fff;
+  box-shadow: 0 0 0 1.5px rgba(0,0,0,.35), 0 3px 8px rgba(0,0,0,.4);
+  transition: width .15s, height .15s;
+}
+.hut-marker svg { width: 60%; height: 60%; fill: #fff; }
 .hut-marker.staffed { --hut: #c0392b; }
 .hut-marker.self-service { --hut: #8a3b12; }
 .hut-marker.shelter { --hut: #4a6b2a; }
+.hut-marker.trip-start { --hut: #0b5fff; box-shadow: 0 0 0 4px rgba(11,95,255,.35), 0 3px 8px rgba(0,0,0,.4); }
+.hut-marker.trip-end { --hut: #7b1fa2; box-shadow: 0 0 0 4px rgba(123,31,162,.35), 0 3px 8px rgba(0,0,0,.4); }
+#map.zoom-far .hut-marker { width: 26px; height: 26px; border-width: 2px; }
+.hut-label {
+  position: absolute; left: 42px; top: 50%; transform: translateY(-50%);
+  display: none; white-space: nowrap; pointer-events: none;
+  padding: 2px 7px; border-radius: 6px;
+  background: rgba(255,255,255,.92); color: #111; font-size: 12px; font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+}
+#map.zoom-near .hut-label, #map3d .hut-label { display: block; }
 .hut h3 { margin: 0 0 2px; font-size: 1rem; }
 .hut .kind { color: #666; font-size: 0.85rem; margin-bottom: 6px; }
 .hut table { border-collapse: collapse; font-size: 0.85rem; }
 .hut th { text-align: left; color: #666; font-weight: 500; padding: 1px 8px 1px 0; vertical-align: top; }
 .hut td { padding: 1px 0; }
 .hut .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-.hut .actions a, .hut .actions button { font-size: 0.85rem; padding: 4px 8px; border: 1px solid #c9d1dc; border-radius: 6px; background: #f5f7fa; color: #111; text-decoration: none; cursor: pointer; }
+.hut .actions a, .hut .actions button { font-size: 0.9rem; padding: 7px 11px; border: 1px solid #c9d1dc; border-radius: 6px; background: #f5f7fa; color: #111; text-decoration: none; cursor: pointer; }
 .hut-legend { display: inline-flex; gap: 10px; align-items: center; }
 
 /* 3D-visning */
@@ -206,8 +226,7 @@ main { position: relative; flex: 1; min-height: 0; }
 .panel3d #exaggeration-value { font-variant-numeric: tabular-nums; min-width: 3ch; }
 .hint3d { font-size: 0.8rem; }
 @media (max-width: 600px) { .hint3d { display: none; } }
-#map3d .weather-marker, #map3d .hut-marker { cursor: pointer; }
-#map3d .hut-marker { margin: 0; }
+#map3d .weather-marker, #map3d .hut-hit { cursor: pointer; }
 .maplibregl-popup-content { color: #111; font-family: inherit; }
 
 /* Tur mellom hytter (2D) */
@@ -253,3 +272,6 @@ main { position: relative; flex: 1; min-height: 0; }
   display: flex; align-items: center; justify-content: center; font-size: 18px;
   box-shadow: 0 2px 6px rgba(0,0,0,.4);
 }
+
+.trip-row select { flex: 1; min-width: 0; max-width: 100%; }
+.trip-hint { color: var(--muted); font-size: 0.8rem; }

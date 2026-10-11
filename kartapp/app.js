@@ -640,6 +640,15 @@
       </div>`;
   }
 
+  let hutsChanged = false;
+  function updateZoomClasses() {
+    const z = map.getZoom();
+    map.getContainer().classList.toggle("zoom-near", z >= 11);
+    map.getContainer().classList.toggle("zoom-far", z < 10);
+  }
+  map.on("zoomend", updateZoomClasses);
+  updateZoomClasses();
+
   async function loadHuts() {
     if (!hutToggle.checked) return;
     if (map.getZoom() < HUT_MIN_ZOOM) { setStatus("Zoom inn for å se turisthytter"); return; }
@@ -668,14 +677,19 @@
         const kind = hutKind(h.tags);
         const marker = L.marker([lat, lon], {
           title: h.tags.name || kind.label,
-          icon: L.divIcon({ className: "", iconSize: null, html: `<div class="hut-marker ${kind.cls}">${HUT_SVG}</div>` }),
+          icon: L.divIcon({
+            className: "hut-icon", iconSize: [44, 44], iconAnchor: [22, 22], popupAnchor: [0, -20],
+            html: `<div class="hut-hit"><div class="hut-marker ${kind.cls}">${HUT_SVG}</div><span class="hut-label">${esc(h.tags.name || "")}</span></div>`,
+          }),
         }).bindPopup(() => hutPopup(h), { maxWidth: 320 });
         marker.addTo(hutLayer);
         huts.byId.set(key, marker);
         huts.data.set(key, h);
+        hutsChanged = true;
         added++;
       }
       setStatus(huts.byId.size ? "" : "Ingen hytter registrert i dette utsnittet");
+      if (hutsChanged) { hutsChanged = false; if (typeof fillTripSelects === "function") fillTripSelects(); }
       if (!huts.byId.size) setTimeout(() => setStatus(""), 3000);
     } catch (err) {
       if (huts.inflight === myRequest) setStatus("Kunne ikke hente hytter: " + err.message, true);
@@ -847,7 +861,9 @@
 
   // ---------- Tur mellom to hytter, med gjennomflyging i 3D ----------
   const BROUTER = "https://brouter.de/brouter";
-  const trip = { start: null, end: null, route: null, layer: L.layerGroup().addTo(map) };
+  const trip = { start: null, end: null, route: null, open: false, layer: L.layerGroup().addTo(map) };
+  const tripFromSelect = document.getElementById("trip-from-select");
+  const tripToSelect = document.getElementById("trip-to-select");
   const tripPanel = document.getElementById("trip-panel");
   const tripFly = document.getElementById("trip-fly");
   const tripStats = document.getElementById("trip-stats");
@@ -903,10 +919,25 @@
     }
   }
 
+  function fillTripSelects() {
+    const list = [...huts.data.entries()]
+      .map(([key, h]) => ({ key, name: hutName(h), kind: hutKind(h.tags).label }))
+      .sort((a, b) => a.name.localeCompare(b.name, "nb"));
+    for (const [sel, placeholder] of [[tripFromSelect, "Velg starthytte …"], [tripToSelect, "Velg målhytte …"]]) {
+      const current = sel.value;
+      sel.innerHTML = `<option value="">${placeholder}</option>` +
+        list.map((h) => `<option value="${esc(h.key)}">${esc(h.name)} (${esc(h.kind.toLowerCase())})</option>`).join("");
+      sel.value = current;
+    }
+    document.getElementById("trip-hint").textContent = list.length
+      ? `${list.length} hytter i utsnittet. Du kan også trykke på en hytte i kartet.`
+      : "Slå på Turisthytter og zoom inn, så fylles listene med hyttene i utsnittet.";
+  }
+
   function renderTrip() {
-    tripPanel.hidden = !(trip.start || trip.end);
-    document.getElementById("trip-from").textContent = trip.start ? hutName(trip.start) : "Velg starthytte i en hyttepopup";
-    document.getElementById("trip-to").textContent = trip.end ? hutName(trip.end) : "Velg målhytte i en hyttepopup";
+    tripPanel.hidden = !(trip.open || trip.start || trip.end);
+    tripFromSelect.value = trip.start ? trip.start.key : "";
+    tripToSelect.value = trip.end ? trip.end.key : "";
     for (const [key, marker] of huts.byId) {
       const el = marker.getElement() && marker.getElement().querySelector(".hut-marker");
       if (!el) continue;
@@ -950,14 +981,25 @@
     const h = huts.data.get(key);
     if (!h) return;
     trip[role] = { ...h, key };
+    trip.open = true;
     map.closePopup();
+    fillTripSelects();
     computeTrip();
   };
   document.getElementById("trip-reset").addEventListener("click", () => {
     trip.start = trip.end = trip.route = null;
+    trip.open = false;
     trip.layer.clearLayers();
     renderTrip();
   });
+  document.getElementById("trip-btn").addEventListener("click", () => {
+    trip.open = true;
+    if (!hutToggle.checked) { hutToggle.checked = true; hutToggle.dispatchEvent(new Event("change")); }
+    fillTripSelects();
+    renderTrip();
+  });
+  tripFromSelect.addEventListener("change", () => { if (tripFromSelect.value) window.__tripSet("start", tripFromSelect.value); else { trip.start = null; computeTrip(); } });
+  tripToSelect.addEventListener("change", () => { if (tripToSelect.value) window.__tripSet("end", tripToSelect.value); else { trip.end = null; computeTrip(); } });
 
   // --- Gjennomflyging i 3D ---
   const FLY_ZOOM = 14.2, FLY_PITCH = 64;
