@@ -12,6 +12,7 @@ En enkel kartapp bygget på åpne norske datatjenester:
 | Turisthytter | OpenStreetMap via Overpass API (`tourism=alpine_hut`, `wilderness_hut`, enkle buer) |
 | Stier | Waymarked Trails (OSM-vandreruter som fliselag) eller Kartverkets WMS «Tur- og friluftsruter» |
 | 3D-terreng | AWS Terrain Tiles (Mapzen Terrarium, ca. 30 m oppløsning) vist med MapLibre GL JS |
+| Ruter mellom hytter | BRouter (`brouter.de`, profil `hiking-mountain`) på OpenStreetMap-data |
 
 ## Funksjoner
 
@@ -27,6 +28,11 @@ En enkel kartapp bygget på åpne norske datatjenester:
   høydemodellen, og vær-, hytte- og stilagene som er slått på følger med. Tilt og roter med to fingre
   på nettbrett eller høyreklikk og dra på PC. Glideren styrer hvor mye terrenget overdrives.
   MapLibre lastes først når knappen brukes. «Tilbake til 2D» tar med seg posisjonen tilbake.
+- **Tur mellom hytter**: velg «Start tur her» i én hyttepopup og «Tur hit» i en annen. Ruten beregnes
+  langs stier med BRouter og tegnes på kartet med lengde, stigning, fall og anslått tid etter Naismiths
+  regel. Finner ikke BRouter noen sti, brukes rett linje og det sies fra. «Fly turen i 3D» åpner
+  3D-kartet og lar kameraet følge stien fra start til mål med høydeprofil, framdriftsglider, fart og pause.
+  Mellomrom pauser, og å dra i kartet stopper flygingen så du kan se deg rundt.
 - **Stier**: fliselag med vandreruter fra Waymarked Trails (OpenStreetMap), eller Kartverkets nasjonale
   database for tur- og friluftsruter som WMS. Kartverkets topografiske kart viser dessuten merkede stier
   når du zoomer langt inn.

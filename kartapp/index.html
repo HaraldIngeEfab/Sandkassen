@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Norgeskart med vær</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=6">
+  <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
   <header class="topbar">
@@ -41,6 +41,18 @@
     <aside id="results" class="results" hidden></aside>
     <div id="status" class="status" hidden></div>
 
+    <aside id="trip-panel" class="trip-panel" hidden aria-label="Tur mellom hytter">
+      <header><span>Tur mellom hytter</span><button type="button" id="trip-reset" title="Nullstill tur">×</button></header>
+      <div class="trip-body">
+        <div class="trip-row"><span class="trip-label">Fra</span><span id="trip-from">Velg starthytte i en hyttepopup</span></div>
+        <div class="trip-row"><span class="trip-label">Til</span><span id="trip-to">Velg målhytte i en hyttepopup</span></div>
+        <div id="trip-stats" class="trip-stats"></div>
+        <div class="trip-actions">
+          <button type="button" id="trip-fly" class="primary" disabled>Fly turen i 3D</button>
+        </div>
+      </div>
+    </aside>
+
     <div id="map3d-wrap" hidden>
       <div id="map3d" role="application" aria-label="3D-kart"></div>
       <div class="panel3d">
@@ -49,6 +61,27 @@
         <span class="hint3d">Dra med to fingre eller høyreklikk for å tilte og rotere</span>
       </div>
       <div id="status3d" class="status" hidden></div>
+      <section id="fly-panel" class="fly-panel" hidden aria-label="Gjennomflyging av tur">
+        <div class="fly-row">
+          <button type="button" id="fly-play" aria-label="Pause">❚❚</button>
+          <div class="fly-info" id="fly-info">–</div>
+          <label class="fly-speed">Fart
+            <select id="fly-speed">
+              <option value="25">Rusle</option>
+              <option value="60" selected>Normal</option>
+              <option value="150">Rask</option>
+            </select>
+          </label>
+          <button type="button" id="fly-stop" title="Avslutt gjennomflyging">Avslutt</button>
+        </div>
+        <input type="range" id="fly-slider" min="0" max="1000" value="0" step="1" aria-label="Posisjon på turen">
+        <svg id="fly-profile" class="fly-profile" viewBox="0 0 600 70" preserveAspectRatio="none" aria-label="Høydeprofil">
+          <path id="fly-profile-area" d=""></path>
+          <path id="fly-profile-line" d=""></path>
+          <line id="fly-profile-cursor" x1="0" y1="0" x2="0" y2="70"></line>
+        </svg>
+        <div class="fly-legend"><span id="fly-profile-min">–</span><span id="fly-profile-max">–</span></div>
+      </section>
     </div>
 
     <section id="sim-panel" class="sim-panel" hidden aria-label="Værsimulering">
@@ -85,6 +118,6 @@
   </footer>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>

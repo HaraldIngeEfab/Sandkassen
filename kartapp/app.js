@@ -583,7 +583,7 @@
   const HUT_MIN_ZOOM = 8;
   const hutLayer = L.layerGroup();
   const hutToggle = document.getElementById("toggle-huts");
-  const huts = { loadedBounds: null, timer: null, inflight: null, byId: new Map() };
+  const huts = { loadedBounds: null, timer: null, inflight: null, byId: new Map(), data: new Map() };
 
   const HUT_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 12h3v8h5v-5h4v5h5v-8h3z"/></svg>';
 
@@ -633,6 +633,10 @@
           <a href="${esc(utUrl)}" target="_blank" rel="noopener">Søk på UT.no</a>
           <a href="${esc(osmUrl)}" target="_blank" rel="noopener">OSM</a>
         </div>
+        <div class="actions">
+          <button type="button" onclick="window.__tripSet('start','${h.type}/${h.id}')">Start tur her</button>
+          <button type="button" onclick="window.__tripSet('end','${h.type}/${h.id}')">Tur hit</button>
+        </div>
       </div>`;
   }
 
@@ -668,6 +672,7 @@
         }).bindPopup(() => hutPopup(h), { maxWidth: 320 });
         marker.addTo(hutLayer);
         huts.byId.set(key, marker);
+        huts.data.set(key, h);
         added++;
       }
       setStatus(huts.byId.size ? "" : "Ingen hytter registrert i dette utsnittet");
@@ -765,14 +770,15 @@
   }
 
   async function open3d() {
-    if (view3d.active) return;
+    if (view3d.active) return view3d.map;
     if (sim.active) closeSimulation();
     map.closePopup();
     setStatus("Laster 3D-kart …");
     try { await loadMapLibre(); } catch (err) { setStatus(err.message, true); return; }
     try {
-      open3dMap();
+      const ready = open3dMap();
       setStatus("");
+      return ready;
     } catch (err) {
       console.error(err);
       view3d.active = false;
@@ -812,10 +818,12 @@
     });
     m3.once("load", () => setStatus3d(""));
     setStatus3d("Bygger 3D-kart …");
+    return new Promise((resolve) => (m3.loaded() ? resolve(m3) : m3.once("load", () => resolve(m3))));
   }
 
   function close3d() {
     if (!view3d.active) return;
+    stopFlight();
     const m3 = view3d.map;
     const c = m3.getCenter();
     view3d.markers.forEach((mk) => mk.remove());
@@ -836,6 +844,230 @@
   document.addEventListener("keydown", (e) => { if (view3d.active && e.key === "Escape") close3d(); });
   // «Vær her» i en hyttepopup i 3D: gå tilbake til 2D og vis været der
   window.__wxHere = (lat, lon, name) => { if (view3d.active) { close3d(); map.setView([lat, lon], Math.max(map.getZoom(), 10)); } showWeatherAt(lat, lon, name); };
+
+  // ---------- Tur mellom to hytter, med gjennomflyging i 3D ----------
+  const BROUTER = "https://brouter.de/brouter";
+  const trip = { start: null, end: null, route: null, layer: L.layerGroup().addTo(map) };
+  const tripPanel = document.getElementById("trip-panel");
+  const tripFly = document.getElementById("trip-fly");
+  const tripStats = document.getElementById("trip-stats");
+
+  const R_EARTH = 6371000;
+  function haversine(a, b) { // [lon, lat]
+    const toR = Math.PI / 180;
+    const dLat = (b[1] - a[1]) * toR, dLon = (b[0] - a[0]) * toR;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(a[1] * toR) * Math.cos(b[1] * toR) * Math.sin(dLon / 2) ** 2;
+    return 2 * R_EARTH * Math.asin(Math.sqrt(h));
+  }
+  function bearingBetween(a, b) {
+    const toR = Math.PI / 180;
+    const y = Math.sin((b[0] - a[0]) * toR) * Math.cos(b[1] * toR);
+    const x = Math.cos(a[1] * toR) * Math.sin(b[1] * toR) - Math.sin(a[1] * toR) * Math.cos(b[1] * toR) * Math.cos((b[0] - a[0]) * toR);
+    return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+  }
+  function fmtKm(m) { return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1).replace(".", ",")} km`; }
+  function fmtTime(sec) { const h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60); return h ? `${h} t ${m} min` : `${m} min`; }
+
+  function hutName(h) { return h.tags.name || h.tags["name:no"] || hutKind(h.tags).label; }
+
+  // Rute: { coords: [[lon,lat,ele?],...], cum: [m,...], length, ascent, descent, time, source }
+  function buildRoute(coords, source) {
+    const cum = [0];
+    for (let i = 1; i < coords.length; i++) cum.push(cum[i - 1] + haversine(coords[i - 1], coords[i]));
+    let ascent = 0, descent = 0, hasEle = coords.every((c) => typeof c[2] === "number");
+    if (hasEle) {
+      for (let i = 1; i < coords.length; i++) {
+        const d = coords[i][2] - coords[i - 1][2];
+        if (d > 0) ascent += d; else descent -= d;
+      }
+    }
+    const length = cum[cum.length - 1];
+    // Naismiths regel: 5 km/t pluss 1 time per 600 høydemeter opp
+    const time = length / (5000 / 3600) + (hasEle ? (ascent / 600) * 3600 : 0);
+    return { coords, cum, length, ascent: hasEle ? ascent : null, descent: hasEle ? descent : null, time, source, hasEle };
+  }
+
+  async function routeBetween(a, b) {
+    const url = `${BROUTER}?lonlats=${a.lon.toFixed(6)},${a.lat.toFixed(6)}|${b.lon.toFixed(6)},${b.lat.toFixed(6)}&profile=hiking-mountain&alternativeidx=0&format=geojson`;
+    try {
+      const gj = await getJson(url);
+      const f = gj.features && gj.features[0];
+      const coords = f && f.geometry && f.geometry.coordinates;
+      if (!coords || coords.length < 2) throw new Error("tom rute");
+      return buildRoute(coords.map((c) => [c[0], c[1], typeof c[2] === "number" ? c[2] : undefined]), "Langs stier (BRouter / OpenStreetMap)");
+    } catch (err) {
+      console.warn("BRouter feilet, bruker rett linje:", err);
+      const n = 60, coords = [];
+      for (let i = 0; i <= n; i++) coords.push([a.lon + ((b.lon - a.lon) * i) / n, a.lat + ((b.lat - a.lat) * i) / n]);
+      return buildRoute(coords, "Rett linje (fant ingen sti-rute)");
+    }
+  }
+
+  function renderTrip() {
+    tripPanel.hidden = !(trip.start || trip.end);
+    document.getElementById("trip-from").textContent = trip.start ? hutName(trip.start) : "Velg starthytte i en hyttepopup";
+    document.getElementById("trip-to").textContent = trip.end ? hutName(trip.end) : "Velg målhytte i en hyttepopup";
+    for (const [key, marker] of huts.byId) {
+      const el = marker.getElement() && marker.getElement().querySelector(".hut-marker");
+      if (!el) continue;
+      el.classList.toggle("trip-start", !!trip.start && key === trip.start.key);
+      el.classList.toggle("trip-end", !!trip.end && key === trip.end.key);
+    }
+    const r = trip.route;
+    if (r) {
+      tripStats.innerHTML =
+        `<strong>${esc(fmtKm(r.length))}</strong>` +
+        (r.ascent != null ? ` · ↑ ${Math.round(r.ascent)} m · ↓ ${Math.round(r.descent)} m` : "") +
+        ` · ca. ${esc(fmtTime(r.time))}<br><span>${esc(r.source)}</span>`;
+    } else tripStats.textContent = trip.start && trip.end ? "Beregner rute …" : "";
+    tripFly.disabled = !r;
+  }
+
+  function drawRoute2d() {
+    trip.layer.clearLayers();
+    if (!trip.route) return;
+    const latlngs = trip.route.coords.map((c) => [c[1], c[0]]);
+    L.polyline(latlngs, { color: "#fff", weight: 7, opacity: 0.8 }).addTo(trip.layer);
+    L.polyline(latlngs, { color: "#ff6a00", weight: 4 }).addTo(trip.layer);
+    map.fitBounds(L.latLngBounds(latlngs).pad(0.2));
+  }
+
+  async function computeTrip() {
+    trip.route = null;
+    renderTrip();
+    if (!trip.start || !trip.end) return;
+    setStatus("Beregner rute langs stier …");
+    const [a, b] = [trip.start, trip.end];
+    const route = await routeBetween(a, b);
+    if (trip.start !== a || trip.end !== b) return; // valget er endret i mellomtiden
+    trip.route = route;
+    setStatus("");
+    renderTrip();
+    drawRoute2d();
+  }
+
+  window.__tripSet = (role, key) => {
+    const h = huts.data.get(key);
+    if (!h) return;
+    trip[role] = { ...h, key };
+    map.closePopup();
+    computeTrip();
+  };
+  document.getElementById("trip-reset").addEventListener("click", () => {
+    trip.start = trip.end = trip.route = null;
+    trip.layer.clearLayers();
+    renderTrip();
+  });
+
+  // --- Gjennomflyging i 3D ---
+  const FLY_ZOOM = 14.2, FLY_PITCH = 64;
+  const fly = { raf: null, dist: 0, bearing: null, last: 0, playing: false, hiker: null, route: null };
+  const flyPanel = document.getElementById("fly-panel");
+  const flySlider = document.getElementById("fly-slider");
+  const flyPlay = document.getElementById("fly-play");
+  const flySpeed = document.getElementById("fly-speed");
+  const flyInfo = document.getElementById("fly-info");
+
+  function pointAt(route, d) {
+    const { coords, cum } = route;
+    if (d <= 0) return coords[0];
+    if (d >= route.length) return coords[coords.length - 1];
+    let lo = 0, hi = cum.length - 1;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (cum[mid] <= d) lo = mid; else hi = mid; }
+    const f = (d - cum[lo]) / Math.max(cum[hi] - cum[lo], 1e-9);
+    const a = coords[lo], b = coords[hi];
+    const p = [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+    if (typeof a[2] === "number" && typeof b[2] === "number") p.push(a[2] + (b[2] - a[2]) * f);
+    return p;
+  }
+
+  function drawProfile(route) {
+    const area = document.getElementById("fly-profile-area");
+    const line = document.getElementById("fly-profile-line");
+    if (!route.hasEle) { area.setAttribute("d", ""); line.setAttribute("d", ""); document.getElementById("fly-profile-min").textContent = "Høydeprofil ikke tilgjengelig"; document.getElementById("fly-profile-max").textContent = ""; return; }
+    const eles = route.coords.map((c) => c[2]);
+    const min = Math.min(...eles), max = Math.max(...eles), span = Math.max(max - min, 10);
+    const pts = route.coords.map((c, i) => `${((route.cum[i] / route.length) * 600).toFixed(1)},${(66 - ((c[2] - min) / span) * 60).toFixed(1)}`);
+    line.setAttribute("d", "M" + pts.join(" L"));
+    area.setAttribute("d", "M0,70 L" + pts.join(" L") + " L600,70 Z");
+    document.getElementById("fly-profile-min").textContent = `Lavest ${Math.round(min)} moh.`;
+    document.getElementById("fly-profile-max").textContent = `Høyest ${Math.round(max)} moh.`;
+  }
+
+  function flyFrame(ts) {
+    if (!fly.playing) return;
+    const dt = Math.min((ts - fly.last) / 1000, 0.3); // tåler trege rammer, men hopper ikke etter fanebytte
+    fly.last = ts;
+    fly.dist += Number(flySpeed.value) * dt;
+    if (fly.dist >= fly.route.length) { fly.dist = fly.route.length; renderFly(); pauseFlight(); flyInfo.textContent = `Framme ved ${hutName(trip.end)} · ${fmtKm(fly.route.length)}`; return; }
+    renderFly();
+    fly.raf = requestAnimationFrame(flyFrame);
+  }
+
+  function renderFly() {
+    const m3 = view3d.map, route = fly.route;
+    if (!m3 || !route) return;
+    const pos = pointAt(route, fly.dist);
+    const ahead = pointAt(route, Math.min(fly.dist + 150, route.length));
+    const target = haversine(pos, ahead) > 5 ? bearingBetween(pos, ahead) : (fly.bearing ?? 0);
+    if (fly.bearing == null) fly.bearing = target;
+    else { let diff = ((target - fly.bearing + 540) % 360) - 180; fly.bearing = (fly.bearing + diff * 0.08 + 360) % 360; }
+    m3.jumpTo({ center: [pos[0], pos[1]], bearing: fly.bearing, pitch: FLY_PITCH, zoom: FLY_ZOOM });
+    fly.hiker.setLngLat([pos[0], pos[1]]);
+    flySlider.value = String(Math.round((fly.dist / route.length) * 1000));
+    document.getElementById("fly-profile-cursor").setAttribute("x1", (fly.dist / route.length) * 600);
+    document.getElementById("fly-profile-cursor").setAttribute("x2", (fly.dist / route.length) * 600);
+    let ele = typeof pos[2] === "number" ? pos[2] : (typeof m3.queryTerrainElevation === "function" ? m3.queryTerrainElevation([pos[0], pos[1]]) : null);
+    flyInfo.textContent = `${fmtKm(fly.dist)} av ${fmtKm(route.length)}` + (ele != null && isFinite(ele) ? ` · ${Math.round(ele)} moh.` : "");
+  }
+
+  function pauseFlight() { fly.playing = false; cancelAnimationFrame(fly.raf); flyPlay.textContent = "▶"; flyPlay.setAttribute("aria-label", "Spill av"); }
+  function playFlight() {
+    if (!fly.route) return;
+    if (fly.dist >= fly.route.length) fly.dist = 0;
+    fly.playing = true; fly.last = performance.now();
+    flyPlay.textContent = "❚❚"; flyPlay.setAttribute("aria-label", "Pause");
+    fly.raf = requestAnimationFrame(flyFrame);
+  }
+  function stopFlight() {
+    pauseFlight();
+    flyPanel.hidden = true;
+    if (fly.hiker) { fly.hiker.remove(); fly.hiker = null; }
+    fly.route = null;
+  }
+
+  async function startFlight() {
+    if (!trip.route) return;
+    const route = trip.route;
+    const m3 = await open3d();
+    if (!m3) return;
+    const gj = { type: "Feature", geometry: { type: "LineString", coordinates: route.coords.map((c) => [c[0], c[1]]) } };
+    if (m3.getSource("route")) m3.getSource("route").setData(gj);
+    else {
+      m3.addSource("route", { type: "geojson", data: gj });
+      m3.addLayer({ id: "route-casing", type: "line", source: "route", paint: { "line-color": "#ffffff", "line-width": 7, "line-opacity": 0.8 }, layout: { "line-join": "round", "line-cap": "round" } });
+      m3.addLayer({ id: "route-line", type: "line", source: "route", paint: { "line-color": "#ff6a00", "line-width": 4 }, layout: { "line-join": "round", "line-cap": "round" } });
+    }
+    if (fly.hiker) fly.hiker.remove();
+    const el = document.createElement("div"); el.className = "hiker-marker"; el.textContent = "🥾";
+    fly.hiker = new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([route.coords[0][0], route.coords[0][1]]).addTo(m3);
+    fly.route = route; fly.dist = 0; fly.bearing = null;
+    drawProfile(route);
+    flyPanel.hidden = false;
+    flyInfo.textContent = `${hutName(trip.start)} → ${hutName(trip.end)}`;
+    m3.once("dragstart", pauseFlight);
+    renderFly();
+    playFlight();
+  }
+
+  tripFly.addEventListener("click", startFlight);
+  flyPlay.addEventListener("click", () => (fly.playing ? pauseFlight() : playFlight()));
+  document.getElementById("fly-stop").addEventListener("click", stopFlight);
+  flySlider.addEventListener("input", () => { if (!fly.route) return; pauseFlight(); fly.dist = (Number(flySlider.value) / 1000) * fly.route.length; renderFly(); });
+  document.addEventListener("keydown", (e) => {
+    if (!fly.route || e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+    if (e.key === " ") { e.preventDefault(); fly.playing ? pauseFlight() : playFlight(); }
+  });
 
   // ---------- Start ----------
   loadCityWeather();

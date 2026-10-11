@@ -209,3 +209,47 @@ main { position: relative; flex: 1; min-height: 0; }
 #map3d .weather-marker, #map3d .hut-marker { cursor: pointer; }
 #map3d .hut-marker { margin: 0; }
 .maplibregl-popup-content { color: #111; font-family: inherit; }
+
+/* Tur mellom hytter (2D) */
+.trip-panel {
+  position: absolute; top: 12px; right: 12px; z-index: 1000;
+  width: min(320px, calc(100% - 24px));
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.15);
+  font-size: 0.9rem;
+}
+.trip-panel header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border); font-weight: 600; }
+.trip-panel header button { padding: 2px 8px; }
+.trip-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.trip-row { display: flex; gap: 8px; align-items: baseline; }
+.trip-label { color: var(--muted); min-width: 2.2em; }
+.trip-stats { color: var(--muted); font-variant-numeric: tabular-nums; }
+.trip-stats strong { color: var(--fg); }
+.trip-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.hut-marker.trip-start { --hut: #0b5fff; }
+.hut-marker.trip-end { --hut: #7b1fa2; }
+
+/* Gjennomflyging (3D) */
+.fly-panel {
+  position: absolute; left: 50%; bottom: 36px; transform: translateX(-50%); z-index: 10;
+  width: min(640px, calc(100% - 24px));
+  padding: 10px 14px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.2);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.fly-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fly-row #fly-play { width: 40px; font-size: 1rem; }
+.fly-info { flex: 1 1 200px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.fly-speed { color: var(--muted); font-size: 0.9rem; display: flex; gap: 6px; align-items: center; }
+#fly-slider { width: 100%; margin: 0; }
+.fly-profile { width: 100%; height: 70px; display: block; background: var(--panel); border-radius: 6px; }
+#fly-profile-area { fill: color-mix(in srgb, var(--accent) 25%, transparent); stroke: none; }
+#fly-profile-line { fill: none; stroke: var(--accent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+#fly-profile-cursor { stroke: #d7301f; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.fly-legend { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--muted); }
+.hiker-marker {
+  width: 34px; height: 34px; border-radius: 50%; background: #fff; border: 3px solid #d7301f;
+  display: flex; align-items: center; justify-content: center; font-size: 18px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.4);
+}
