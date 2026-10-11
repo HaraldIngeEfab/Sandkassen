@@ -1431,7 +1431,8 @@
     orbit.poi = poi;
     orbit.bearing = m3.getBearing();
     orbit.elapsed = 0;
-    const el = document.createElement("div"); el.className = "orbit-target";
+    // Ytre element plasseres av MapLibre (via transform), den animerte ringen må derfor ligge inni
+    const el = document.createElement("div"); el.className = "orbit-target-wrap"; el.innerHTML = '<div class="orbit-target"></div>';
     orbit.target = new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([poi.lon, poi.lat]).addTo(m3);
     orbitPanel.hidden = false;
     orbitInfo.textContent = hutName(poi);

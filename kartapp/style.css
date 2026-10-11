@@ -306,6 +306,7 @@ main { position: relative; flex: 1; min-height: 0; }
 .blend.disabled { opacity: .45; }
 
 /* Mål for rundtur i 3D */
+.orbit-target-wrap { width: 44px; height: 44px; pointer-events: none; }
 .orbit-target {
   width: 44px; height: 44px; border-radius: 50%;
   border: 3px solid #ff6a00; box-shadow: 0 0 0 6px rgba(255,106,0,.25), 0 0 18px rgba(255,106,0,.6);
