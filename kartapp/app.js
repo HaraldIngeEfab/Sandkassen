@@ -724,6 +724,7 @@
           <button type="button" onclick="window.__tripSet('start','${key}')">Start tur her</button>
           <button type="button" onclick="window.__tripSet('end','${key}')">Tur hit</button>
           <button type="button" onclick="window.__orbit('${key}')">Rundtur i 3D</button>
+          <button type="button" onclick="window.__look('${key}')">Utsikt herfra</button>
         </div>
       </div>`;
   }
@@ -1053,9 +1054,9 @@
       style: style3d(),
       center: [c.lng, c.lat],
       zoom: Math.max(map.getZoom() - 1, 1),
-      pitch: 60, bearing: 0, maxPitch: 80,
+      pitch: 60, bearing: 0, maxPitch: 85,
       attributionControl: { compact: false },
-      maxZoom: 17,
+      maxZoom: 22, // utsikt i øyehøyde trenger høy zoom
     });
     const m3 = view3d.map;
     m3.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
@@ -1078,9 +1079,10 @@
     m3.once("load", () => setStatus3d(""));
     m3.on("zoom", update3dZoom);
     installFlightGestures(m3);
+    installLookGestures(m3);
     let syncTimer = null;
     m3.on("moveend", () => {
-      if (fly.playing || orbit.playing) return;
+      if (fly.playing || orbit.playing || look.active) return;
       clearTimeout(syncTimer);
       syncTimer = setTimeout(() => {
         if (!view3d.active) return;
@@ -1097,6 +1099,7 @@
     if (!view3d.active) return;
     stopFlight();
     stopOrbit();
+    stopLook();
     const m3 = view3d.map;
     const c = m3.getCenter();
     view3d.markers.forEach((mk) => mk.remove());
@@ -1215,6 +1218,7 @@
     } else tripStats.textContent = trip.start && trip.end ? "Beregner rute …" : "";
     tripFly.disabled = !r;
     document.getElementById("trip-orbit").disabled = !trip.end;
+    document.getElementById("trip-look").disabled = !trip.end;
   }
 
   function drawRoute2d() {
@@ -1349,6 +1353,7 @@
   async function startFlight() {
     if (!trip.route) return;
     if (typeof stopOrbit === "function") stopOrbit();
+    if (typeof stopLook === "function") stopLook();
     const route = trip.route;
     const m3 = await open3d();
     if (!m3) return;
@@ -1441,6 +1446,7 @@
   async function startOrbit(poi) {
     stopFlight();
     stopOrbit();
+    stopLook();
     map.setView([poi.lat, poi.lon], Math.max(map.getZoom(), 12), { animate: false }); // så 3D åpner på rett sted og 2D står der etterpå
     const m3 = await open3d();
     if (!m3) return;
@@ -1464,7 +1470,7 @@
   document.getElementById("orbit-zoom-out").addEventListener("click", () => nudgeOrbitZoom(-0.5));
   // Knip- og rullezoom under flyging eller rundtur. Kameraet settes på nytt hver ramme med jumpTo, som avbryter
   // MapLibres egne zoomgester, så de slås av i flymodus og håndteres her i stedet.
-  function flightZoomGet() { return fly.route ? fly.zoom : orbit.active ? orbit.zoomOffset : null; }
+  function flightZoomGet() { if (look.active) return null; return fly.route ? fly.zoom : orbit.active ? orbit.zoomOffset : null; }
   function flightZoomSet(v) {
     if (fly.route) { fly.zoom = clampZoom(v); if (!fly.playing) renderFly(); }
     else if (orbit.active) { orbit.zoomOffset = v; if (!orbit.playing) orbitFrame(performance.now()); }
@@ -1504,6 +1510,141 @@
     if (e.key === " ") { e.preventDefault(); orbit.playing ? pauseOrbit() : playOrbit(); }
     else if (e.key === "+" || e.key === "=") nudgeOrbitZoom(0.5);
     else if (e.key === "-") nudgeOrbitZoom(-0.5);
+  });
+
+  // ---------- Utsikt fra et interessepunkt (førsteperson i 3D) ----------
+  const LOOK_PITCH_MIN = 55, LOOK_PITCH_MAX = 85; // 85 er MapLibres grense, nesten vannrett
+  const look = { active: false, playing: true, raf: null, last: 0, bearing: 0, pitch: 82, fov: 36.87, poi: null, drag: null };
+  const lookPanel = document.getElementById("look-panel");
+  const lookPlay = document.getElementById("look-play");
+  const lookEye = document.getElementById("look-eye");
+  const lookInfo = document.getElementById("look-info");
+
+  function destinationPoint(lon, lat, bearingDeg, meters) {
+    const toR = Math.PI / 180, br = bearingDeg * toR, d = meters / R_EARTH;
+    const lat1 = lat * toR, lon1 = lon * toR;
+    const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(br));
+    const lon2 = lon1 + Math.atan2(Math.sin(br) * Math.sin(d) * Math.cos(lat1), Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
+    return [lon2 / toR, lat2 / toR];
+  }
+  function groundAt(m3, lon, lat) {
+    try {
+      if (m3.terrain && m3.transform) return m3.terrain.getElevationForLngLatZoom(new maplibregl.LngLat(lon, lat), m3.transform.tileZoom) || 0;
+    } catch { /* faller tilbake */ }
+    return 0;
+  }
+
+  function applyLook() {
+    const m3 = view3d.map;
+    if (!m3 || !look.poi) return;
+    const { lon, lat } = look.poi;
+    const eye = Number(lookEye.value);
+    const ground = groundAt(m3, lon, lat);
+    // Kameraet står `eye` meter over punktet, like bak det i forhold til blikkretningen, og ser over punktet mot horisonten
+    const back = eye * Math.tan((look.pitch * Math.PI) / 180);
+    const from = destinationPoint(lon, lat, look.bearing + 180, Math.max(back, 0.5));
+    try { if (m3.transform && m3.transform.fov !== look.fov) m3.transform.fov = look.fov; } catch { /* privat API, ikke kritisk */ }
+    try {
+      const cam = m3.calculateCameraOptionsFromTo(new maplibregl.LngLat(from[0], from[1]), ground + eye, new maplibregl.LngLat(lon, lat), ground);
+      m3.jumpTo({ center: cam.center, zoom: cam.zoom, bearing: cam.bearing, pitch: Math.min(cam.pitch, LOOK_PITCH_MAX) });
+    } catch (err) { console.warn("Utsikt:", err.message); }
+    lookInfo.textContent = `Utsikt fra ${hutName(look.poi)} · ${compass(look.bearing)} ${Math.round(look.bearing)}°` + (ground ? ` · ${Math.round(ground / Number(exaggerationInput.value))} moh.` : "");
+  }
+  function lookFrame(ts) {
+    if (!look.active) return;
+    const dt = Math.min((ts - look.last) / 1000, 0.3);
+    look.last = ts;
+    if (look.playing && !look.drag) look.bearing = (look.bearing + 4 * dt) % 360; // rolig panorering
+    applyLook();
+    look.raf = requestAnimationFrame(lookFrame);
+  }
+  function setLookPlaying(on) {
+    look.playing = on;
+    lookPlay.textContent = on ? "❚❚" : "▶";
+    lookPlay.setAttribute("aria-label", on ? "Pause rotasjon" : "Roter sakte");
+  }
+  function lookZoom(delta) { look.fov = Math.max(8, Math.min(60, look.fov + delta)); }
+
+  function setLookHandlers(on) {
+    const m3 = view3d.map;
+    if (!m3) return;
+    for (const h of [m3.dragPan, m3.dragRotate, m3.touchZoomRotate, m3.touchPitch, m3.scrollZoom, m3.doubleClickZoom, m3.keyboard]) { if (h) (on ? h.disable() : h.enable()); }
+  }
+  function installLookGestures(m3) {
+    const el = m3.getCanvasContainer();
+    el.addEventListener("pointerdown", (e) => {
+      if (!look.active || !e.isPrimary) return;
+      look.drag = { x: e.clientX, y: e.clientY, bearing: look.bearing, pitch: look.pitch };
+      try { el.setPointerCapture(e.pointerId); } catch { /* ignorer */ }
+    });
+    el.addEventListener("pointermove", (e) => {
+      if (!look.active || !look.drag || !e.isPrimary) return;
+      const scale = look.fov / 36.87; // kikkert gjør bevegelsen finere
+      look.bearing = (look.drag.bearing - (e.clientX - look.drag.x) * 0.25 * scale + 360) % 360;
+      look.pitch = Math.max(LOOK_PITCH_MIN, Math.min(LOOK_PITCH_MAX, look.drag.pitch + (e.clientY - look.drag.y) * 0.15 * scale));
+    });
+    const end = () => { look.drag = null; };
+    el.addEventListener("pointerup", end); el.addEventListener("pointercancel", end);
+    el.addEventListener("wheel", (e) => { if (!look.active) return; e.preventDefault(); lookZoom((e.deltaY > 0 ? 1 : -1) * 3); }, { passive: false });
+    const pinch = { active: false, startDist: 0, startFov: 0 };
+    const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    el.addEventListener("touchstart", (e) => { if (!look.active || e.touches.length !== 2) return; pinch.active = true; pinch.startDist = dist(e.touches); pinch.startFov = look.fov; look.drag = null; }, { passive: true, capture: true });
+    el.addEventListener("touchmove", (e) => { if (!look.active || !pinch.active || e.touches.length !== 2) return; e.preventDefault(); look.fov = Math.max(8, Math.min(60, pinch.startFov * pinch.startDist / Math.max(dist(e.touches), 1))); }, { passive: false, capture: true });
+    const pend = () => { pinch.active = false; };
+    el.addEventListener("touchend", pend, { capture: true }); el.addEventListener("touchcancel", pend, { capture: true });
+  }
+
+  function stopLook() {
+    if (!look.active) return;
+    look.active = false;
+    cancelAnimationFrame(look.raf);
+    lookPanel.hidden = true;
+    const m3 = view3d.map;
+    if (m3) {
+      try { if (m3.transform) m3.transform.fov = 36.87; } catch { /* ignorer */ }
+      setLookHandlers(false);
+      // Tilbake til et vanlig skråblikk over punktet
+      if (look.poi) m3.jumpTo({ center: [look.poi.lon, look.poi.lat], zoom: 13.5, pitch: 60, bearing: look.bearing });
+    }
+    look.poi = null;
+  }
+
+  async function startLook(poi) {
+    stopFlight();
+    stopOrbit();
+    stopLook();
+    map.setView([poi.lat, poi.lon], Math.max(map.getZoom(), 12), { animate: false });
+    const m3 = await open3d();
+    if (!m3) return;
+    look.active = true;
+    look.poi = poi;
+    look.bearing = m3.getBearing();
+    look.pitch = 82;
+    look.fov = 36.87;
+    look.drag = null;
+    look.last = performance.now();
+    setLookHandlers(true);
+    setLookPlaying(true);
+    lookPanel.hidden = false;
+    applyLook();
+    look.raf = requestAnimationFrame(lookFrame);
+  }
+
+  window.__look = (key) => { const poi = getPoi(key); if (poi) { map.closePopup(); startLook(poi); } };
+  lookPlay.addEventListener("click", () => setLookPlaying(!look.playing));
+  document.getElementById("look-stop").addEventListener("click", stopLook);
+  document.getElementById("look-zoom-in").addEventListener("click", () => lookZoom(-5));
+  document.getElementById("look-zoom-out").addEventListener("click", () => lookZoom(5));
+  document.getElementById("trip-look").addEventListener("click", () => { if (trip.end) startLook(trip.end); });
+  document.addEventListener("keydown", (e) => {
+    if (!look.active || e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+    if (e.key === " ") { e.preventDefault(); setLookPlaying(!look.playing); }
+    else if (e.key === "ArrowLeft") look.bearing = (look.bearing - 5 + 360) % 360;
+    else if (e.key === "ArrowRight") look.bearing = (look.bearing + 5) % 360;
+    else if (e.key === "ArrowUp") look.pitch = Math.min(LOOK_PITCH_MAX, look.pitch + 2);
+    else if (e.key === "ArrowDown") look.pitch = Math.max(LOOK_PITCH_MIN, look.pitch - 2);
+    else if (e.key === "+" || e.key === "=") lookZoom(-5);
+    else if (e.key === "-") lookZoom(5);
   });
 
   // ---------- Start ----------

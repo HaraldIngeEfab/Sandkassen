@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Norgeskart med vær</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=15">
+  <link rel="stylesheet" href="style.css?v=16">
 </head>
 <body>
   <header class="topbar">
@@ -65,6 +65,7 @@
         <div class="trip-actions">
           <button type="button" id="trip-fly" class="primary" disabled>Fly turen i 3D</button>
           <button type="button" id="trip-orbit" disabled title="Kretse rundt målet i 3D">Rundtur om målet</button>
+          <button type="button" id="trip-look" disabled title="Se utover fra målet i 3D">Utsikt fra målet</button>
         </div>
       </div>
     </aside>
@@ -78,6 +79,26 @@
         <span class="hint3d">Dra med to fingre eller høyreklikk for å tilte og rotere. Knip eller rull for å zoome, også under flyging.</span>
       </div>
       <div id="status3d" class="status" hidden></div>
+      <section id="look-panel" class="fly-panel" hidden aria-label="Utsikt fra punktet">
+        <div class="fly-row">
+          <button type="button" id="look-play" aria-label="Pause rotasjon">❚❚</button>
+          <div class="fly-info" id="look-info">–</div>
+          <label class="fly-speed">Øyehøyde
+            <select id="look-eye">
+              <option value="2">På bakken</option>
+              <option value="10" selected>Varde</option>
+              <option value="40">Tårn</option>
+              <option value="150">Drone</option>
+            </select>
+          </label>
+          <span class="zoom-btns" aria-label="Kikkert">
+            <button type="button" id="look-zoom-out" title="Videre synsfelt">−</button>
+            <button type="button" id="look-zoom-in" title="Kikkert">+</button>
+          </span>
+          <button type="button" id="look-stop" title="Avslutt utsikten">Avslutt</button>
+        </div>
+        <div class="fly-legend"><span>Dra sidelengs for å snu deg, opp og ned for å se opp og ned. Knip eller rull for kikkert.</span></div>
+      </section>
       <section id="orbit-panel" class="fly-panel" hidden aria-label="Rundtur i 3D">
         <div class="fly-row">
           <button type="button" id="orbit-play" aria-label="Pause">❚❚</button>
@@ -166,6 +187,6 @@
   </footer>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="app.js?v=15"></script>
+  <script src="app.js?v=16"></script>
 </body>
 </html>

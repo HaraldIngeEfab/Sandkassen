@@ -50,6 +50,10 @@ En enkel kartapp bygget på åpne norske datatjenester:
 - **Rundtur i 3D**: fra popupen til en hytte eller et turmål, eller fra turpanelet når et mål er valgt.
   Kameraet går ned mot målet ovenfra og kretser så rundt det med blikket mot målet. Fart og avstand kan
   justeres, mellomrom pauser, og å dra i kartet stopper runden så du kan se deg om.
+- **Utsikt herfra**: fra popupen til en hytte eller et turmål, eller fra turpanelet. Kameraet stilles i
+  øyehøyde på punktet og ser utover. Dra sidelengs for å snu deg, opp og ned for å se opp og ned, knip
+  eller rull for kikkert, og velg øyehøyde fra bakken til dronehøyde. Utsikten roterer sakte til du tar
+  i kartet eller pauser.
 - **Stier**: fliselag med vandreruter fra Waymarked Trails (OpenStreetMap), eller Kartverkets nasjonale
   database for tur- og friluftsruter som WMS. Kartverkets topografiske kart viser dessuten merkede stier
   når du zoomer langt inn.
