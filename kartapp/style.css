@@ -304,3 +304,13 @@ main { position: relative; flex: 1; min-height: 0; }
 .blend input { width: 110px; }
 .blend #blend-value { font-variant-numeric: tabular-nums; min-width: 4ch; }
 .blend.disabled { opacity: .45; }
+
+/* Mål for rundtur i 3D */
+.orbit-target {
+  width: 44px; height: 44px; border-radius: 50%;
+  border: 3px solid #ff6a00; box-shadow: 0 0 0 6px rgba(255,106,0,.25), 0 0 18px rgba(255,106,0,.6);
+  pointer-events: none;
+  animation: orbit-pulse 2s ease-in-out infinite;
+}
+@keyframes orbit-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+@media (prefers-reduced-motion: reduce) { .orbit-target { animation: none; } }

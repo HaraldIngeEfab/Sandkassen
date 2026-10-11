@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Norgeskart med vær</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=12">
+  <link rel="stylesheet" href="style.css?v=13">
 </head>
 <body>
   <header class="topbar">
@@ -64,6 +64,7 @@
         <div id="trip-stats" class="trip-stats"></div>
         <div class="trip-actions">
           <button type="button" id="trip-fly" class="primary" disabled>Fly turen i 3D</button>
+          <button type="button" id="trip-orbit" disabled title="Kretse rundt målet i 3D">Rundtur om målet</button>
         </div>
       </div>
     </aside>
@@ -77,6 +78,27 @@
         <span class="hint3d">Dra med to fingre eller høyreklikk for å tilte og rotere</span>
       </div>
       <div id="status3d" class="status" hidden></div>
+      <section id="orbit-panel" class="fly-panel" hidden aria-label="Rundtur i 3D">
+        <div class="fly-row">
+          <button type="button" id="orbit-play" aria-label="Pause">❚❚</button>
+          <div class="fly-info" id="orbit-info">–</div>
+          <label class="fly-speed">Fart
+            <select id="orbit-speed">
+              <option value="5">Rolig</option>
+              <option value="10" selected>Normal</option>
+              <option value="20">Rask</option>
+            </select>
+          </label>
+          <label class="fly-speed">Avstand
+            <select id="orbit-dist">
+              <option value="-1">Nær</option>
+              <option value="0" selected>Normal</option>
+              <option value="1">Fjern</option>
+            </select>
+          </label>
+          <button type="button" id="orbit-stop" title="Avslutt rundturen">Avslutt</button>
+        </div>
+      </section>
       <section id="fly-panel" class="fly-panel" hidden aria-label="Gjennomflyging av tur">
         <div class="fly-row">
           <button type="button" id="fly-play" aria-label="Pause">❚❚</button>
@@ -136,6 +158,6 @@
   </footer>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="app.js?v=12"></script>
+  <script src="app.js?v=13"></script>
 </body>
 </html>

@@ -723,6 +723,7 @@
         <div class="actions">
           <button type="button" onclick="window.__tripSet('start','${key}')">Start tur her</button>
           <button type="button" onclick="window.__tripSet('end','${key}')">Tur hit</button>
+          <button type="button" onclick="window.__orbit('${key}')">Rundtur i 3D</button>
         </div>
       </div>`;
   }
@@ -1075,7 +1076,7 @@
     m3.on("zoom", update3dZoom);
     let syncTimer = null;
     m3.on("moveend", () => {
-      if (fly.playing) return;
+      if (fly.playing || orbit.playing) return;
       clearTimeout(syncTimer);
       syncTimer = setTimeout(() => {
         if (!view3d.active) return;
@@ -1091,6 +1092,7 @@
   function close3d() {
     if (!view3d.active) return;
     stopFlight();
+    stopOrbit();
     const m3 = view3d.map;
     const c = m3.getCenter();
     view3d.markers.forEach((mk) => mk.remove());
@@ -1208,6 +1210,7 @@
         ` · ca. ${esc(fmtTime(r.time))}<br><span>${esc(r.source)}</span>`;
     } else tripStats.textContent = trip.start && trip.end ? "Beregner rute …" : "";
     tripFly.disabled = !r;
+    document.getElementById("trip-orbit").disabled = !trip.end;
   }
 
   function drawRoute2d() {
@@ -1337,6 +1340,7 @@
 
   async function startFlight() {
     if (!trip.route) return;
+    if (typeof stopOrbit === "function") stopOrbit();
     const route = trip.route;
     const m3 = await open3d();
     if (!m3) return;
@@ -1366,6 +1370,81 @@
   document.addEventListener("keydown", (e) => {
     if (!fly.route || e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
     if (e.key === " ") { e.preventDefault(); fly.playing ? pauseFlight() : playFlight(); }
+  });
+
+  // ---------- Rundtur i 3D rundt en hytte eller et turmål ----------
+  const ORBIT_PITCH = 62;
+  const orbit = { active: false, playing: false, raf: null, last: 0, bearing: 0, elapsed: 0, poi: null, target: null };
+  const orbitPanel = document.getElementById("orbit-panel");
+  const orbitPlay = document.getElementById("orbit-play");
+  const orbitSpeed = document.getElementById("orbit-speed");
+  const orbitDist = document.getElementById("orbit-dist");
+  const orbitInfo = document.getElementById("orbit-info");
+
+  function orbitZoom(poi) {
+    const kind = hutKind(poi.tags).cls;
+    const base = kind === "peak" ? 13.0 : kind === "viewpoint" ? 13.8 : 14.4; // topper sees best litt lenger unna
+    return base - Number(orbitDist.value) * 0.8;
+  }
+
+  function orbitFrame(ts) {
+    if (!orbit.playing) return;
+    const m3 = view3d.map;
+    if (!m3) return;
+    const dt = Math.min((ts - orbit.last) / 1000, 0.3);
+    orbit.last = ts;
+    orbit.elapsed += dt;
+    orbit.bearing = (orbit.bearing + Number(orbitSpeed.value) * dt) % 360;
+    // Myk innflyging de første sekundene: fra høyt og rett ned til skrå rundtur
+    const t = Math.min(orbit.elapsed / 4, 1), ease = 1 - Math.pow(1 - t, 3);
+    const zoom = orbitZoom(orbit.poi) - (1 - ease) * 1.6 + Math.sin(orbit.elapsed / 9) * 0.15;
+    const pitch = 25 + (ORBIT_PITCH - 25) * ease;
+    m3.jumpTo({ center: [orbit.poi.lon, orbit.poi.lat], bearing: orbit.bearing, pitch, zoom });
+    const ele = orbit.poi.tags.ele ? Math.round(Number(orbit.poi.tags.ele)) : (typeof m3.queryTerrainElevation === "function" ? m3.queryTerrainElevation([orbit.poi.lon, orbit.poi.lat]) : null);
+    orbitInfo.textContent = `${hutName(orbit.poi)}${ele != null && isFinite(ele) ? ` · ${Math.round(ele)} moh.` : ""} · ${Math.round(orbit.bearing)}°`;
+    orbit.raf = requestAnimationFrame(orbitFrame);
+  }
+  function pauseOrbit() { orbit.playing = false; cancelAnimationFrame(orbit.raf); orbitPlay.textContent = "▶"; orbitPlay.setAttribute("aria-label", "Spill av"); }
+  function playOrbit() {
+    if (!orbit.active || !view3d.map) return;
+    orbit.playing = true; orbit.last = performance.now();
+    orbitPlay.textContent = "❚❚"; orbitPlay.setAttribute("aria-label", "Pause");
+    view3d.map.once("dragstart", pauseOrbit); // la brukeren se seg rundt uten at kameraet rykker tilbake
+    orbit.raf = requestAnimationFrame(orbitFrame);
+  }
+  function stopOrbit() {
+    if (!orbit.active) return;
+    pauseOrbit();
+    orbit.active = false;
+    orbitPanel.hidden = true;
+    if (orbit.target) { orbit.target.remove(); orbit.target = null; }
+    orbit.poi = null;
+  }
+
+  async function startOrbit(poi) {
+    stopFlight();
+    stopOrbit();
+    map.setView([poi.lat, poi.lon], Math.max(map.getZoom(), 12), { animate: false }); // så 3D åpner på rett sted og 2D står der etterpå
+    const m3 = await open3d();
+    if (!m3) return;
+    orbit.active = true;
+    orbit.poi = poi;
+    orbit.bearing = m3.getBearing();
+    orbit.elapsed = 0;
+    const el = document.createElement("div"); el.className = "orbit-target";
+    orbit.target = new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([poi.lon, poi.lat]).addTo(m3);
+    orbitPanel.hidden = false;
+    orbitInfo.textContent = hutName(poi);
+    playOrbit();
+  }
+
+  window.__orbit = (key) => { const poi = getPoi(key); if (poi) { map.closePopup(); startOrbit(poi); } };
+  orbitPlay.addEventListener("click", () => (orbit.playing ? pauseOrbit() : playOrbit()));
+  document.getElementById("orbit-stop").addEventListener("click", stopOrbit);
+  document.getElementById("trip-orbit").addEventListener("click", () => { if (trip.end) startOrbit(trip.end); });
+  document.addEventListener("keydown", (e) => {
+    if (!orbit.active || e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+    if (e.key === " ") { e.preventDefault(); orbit.playing ? pauseOrbit() : playOrbit(); }
   });
 
   // ---------- Start ----------
