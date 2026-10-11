@@ -315,3 +315,6 @@ main { position: relative; flex: 1; min-height: 0; }
 }
 @keyframes orbit-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
 @media (prefers-reduced-motion: reduce) { .orbit-target { animation: none; } }
+
+.zoom-btns { display: inline-flex; gap: 4px; }
+.zoom-btns button { width: 36px; padding: 6px 0; font-size: 1.1rem; line-height: 1; }

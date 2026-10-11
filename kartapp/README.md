@@ -45,7 +45,8 @@ En enkel kartapp bygget på åpne norske datatjenester:
   langs stier med BRouter og tegnes på kartet med lengde, stigning, fall og anslått tid etter Naismiths
   regel. Finner ikke BRouter noen sti, brukes rett linje og det sies fra. «Fly turen i 3D» åpner
   3D-kartet og lar kameraet følge stien fra start til mål med høydeprofil, framdriftsglider, fart og pause.
-  Mellomrom pauser, og å dra i kartet stopper flygingen så du kan se deg rundt.
+  Mellomrom pauser, og å dra i kartet stopper flygingen så du kan se deg rundt. Zoom underveis med knip,
+  rullehjul, pluss- og minusknappene i panelet eller tastene + og −, uten at flygingen stopper.
 - **Rundtur i 3D**: fra popupen til en hytte eller et turmål, eller fra turpanelet når et mål er valgt.
   Kameraet går ned mot målet ovenfra og kretser så rundt det med blikket mot målet. Fart og avstand kan
   justeres, mellomrom pauser, og å dra i kartet stopper runden så du kan se deg om.

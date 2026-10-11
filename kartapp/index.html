@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Norgeskart med vær</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=14">
+  <link rel="stylesheet" href="style.css?v=15">
 </head>
 <body>
   <header class="topbar">
@@ -75,7 +75,7 @@
         <button type="button" id="btn-2d">← Tilbake til 2D</button>
         <label>Terreng <input type="range" id="exaggeration" min="1" max="3" step="0.25" value="1.5" aria-label="Terrengoverdrivelse"> <span id="exaggeration-value">1,5×</span></label>
         <span class="zoom3d" id="zoom3d" title="Zoomnivå">Zoom –</span>
-        <span class="hint3d">Dra med to fingre eller høyreklikk for å tilte og rotere</span>
+        <span class="hint3d">Dra med to fingre eller høyreklikk for å tilte og rotere. Knip eller rull for å zoome, også under flyging.</span>
       </div>
       <div id="status3d" class="status" hidden></div>
       <section id="orbit-panel" class="fly-panel" hidden aria-label="Rundtur i 3D">
@@ -96,6 +96,10 @@
               <option value="1">Fjern</option>
             </select>
           </label>
+          <span class="zoom-btns" aria-label="Zoom">
+            <button type="button" id="orbit-zoom-out" title="Zoom ut">−</button>
+            <button type="button" id="orbit-zoom-in" title="Zoom inn">+</button>
+          </span>
           <button type="button" id="orbit-stop" title="Avslutt rundturen">Avslutt</button>
         </div>
       </section>
@@ -110,6 +114,10 @@
               <option value="150">Rask</option>
             </select>
           </label>
+          <span class="zoom-btns" aria-label="Zoom">
+            <button type="button" id="fly-zoom-out" title="Zoom ut">−</button>
+            <button type="button" id="fly-zoom-in" title="Zoom inn">+</button>
+          </span>
           <button type="button" id="fly-stop" title="Avslutt gjennomflyging">Avslutt</button>
         </div>
         <input type="range" id="fly-slider" min="0" max="1000" value="0" step="1" aria-label="Posisjon på turen">
@@ -158,6 +166,6 @@
   </footer>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="app.js?v=14"></script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>

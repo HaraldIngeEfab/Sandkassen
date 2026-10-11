@@ -898,6 +898,9 @@
   const MAPLIBRE_VERSION = "4.7.1";
   const TERRAIN_TILES = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
   const view3d = { active: false, map: null, markers: [], loaded: null, styleReady: false };
+  let installFlightGestures = () => {}; // settes av fly- og rundturdelen
+  const FLY_ZOOM_MIN = 10, FLY_ZOOM_MAX = 17;
+  const clampZoom = (z) => Math.max(FLY_ZOOM_MIN, Math.min(FLY_ZOOM_MAX, z));
   const wrap3d = document.getElementById("map3d-wrap");
   const exaggerationInput = document.getElementById("exaggeration");
   const exaggerationValue = document.getElementById("exaggeration-value");
@@ -1074,6 +1077,7 @@
     });
     m3.once("load", () => setStatus3d(""));
     m3.on("zoom", update3dZoom);
+    installFlightGestures(m3);
     let syncTimer = null;
     m3.on("moveend", () => {
       if (fly.playing || orbit.playing) return;
@@ -1263,7 +1267,7 @@
 
   // --- Gjennomflyging i 3D ---
   const FLY_ZOOM = 14.2, FLY_PITCH = 64;
-  const fly = { raf: null, dist: 0, bearing: null, last: 0, playing: false, hiker: null, route: null };
+  const fly = { raf: null, dist: 0, bearing: null, last: 0, playing: false, hiker: null, route: null, zoom: FLY_ZOOM, appliedZoom: null };
   const flyPanel = document.getElementById("fly-panel");
   const flySlider = document.getElementById("fly-slider");
   const flyPlay = document.getElementById("fly-play");
@@ -1314,7 +1318,8 @@
     const target = haversine(pos, ahead) > 5 ? bearingBetween(pos, ahead) : (fly.bearing ?? 0);
     if (fly.bearing == null) fly.bearing = target;
     else { let diff = ((target - fly.bearing + 540) % 360) - 180; fly.bearing = (fly.bearing + diff * 0.08 + 360) % 360; }
-    m3.jumpTo({ center: [pos[0], pos[1]], bearing: fly.bearing, pitch: FLY_PITCH, zoom: FLY_ZOOM });
+    m3.jumpTo({ center: [pos[0], pos[1]], bearing: fly.bearing, pitch: FLY_PITCH, zoom: fly.zoom });
+    fly.appliedZoom = fly.zoom;
     fly.hiker.setLngLat([pos[0], pos[1]]);
     flySlider.value = String(Math.round((fly.dist / route.length) * 1000));
     document.getElementById("fly-profile-cursor").setAttribute("x1", (fly.dist / route.length) * 600);
@@ -1331,8 +1336,11 @@
     flyPlay.textContent = "❚❚"; flyPlay.setAttribute("aria-label", "Pause");
     fly.raf = requestAnimationFrame(flyFrame);
   }
+  function nudgeFlyZoom(delta) { if (!fly.route) return; fly.zoom = clampZoom(fly.zoom + delta); if (!fly.playing) renderFly(); }
   function stopFlight() {
     pauseFlight();
+    fly.appliedZoom = null;
+    if (fly.route) setFlightGestureMode(false);
     flyPanel.hidden = true;
     if (fly.hiker) { fly.hiker.remove(); fly.hiker = null; }
     fly.route = null;
@@ -1354,7 +1362,8 @@
     if (fly.hiker) fly.hiker.remove();
     const el = document.createElement("div"); el.className = "hiker-marker"; el.textContent = "🥾";
     fly.hiker = new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([route.coords[0][0], route.coords[0][1]]).addTo(m3);
-    fly.route = route; fly.dist = 0; fly.bearing = null;
+    fly.route = route; fly.dist = 0; fly.bearing = null; fly.zoom = FLY_ZOOM; fly.appliedZoom = null;
+    setFlightGestureMode(true);
     drawProfile(route);
     flyPanel.hidden = false;
     flyInfo.textContent = `${hutName(trip.start)} → ${hutName(trip.end)}`;
@@ -1364,17 +1373,21 @@
   }
 
   tripFly.addEventListener("click", startFlight);
+  document.getElementById("fly-zoom-in").addEventListener("click", () => nudgeFlyZoom(0.5));
+  document.getElementById("fly-zoom-out").addEventListener("click", () => nudgeFlyZoom(-0.5));
   flyPlay.addEventListener("click", () => (fly.playing ? pauseFlight() : playFlight()));
   document.getElementById("fly-stop").addEventListener("click", stopFlight);
   flySlider.addEventListener("input", () => { if (!fly.route) return; pauseFlight(); fly.dist = (Number(flySlider.value) / 1000) * fly.route.length; renderFly(); });
   document.addEventListener("keydown", (e) => {
     if (!fly.route || e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
     if (e.key === " ") { e.preventDefault(); fly.playing ? pauseFlight() : playFlight(); }
+    else if (e.key === "+" || e.key === "=") nudgeFlyZoom(0.5);
+    else if (e.key === "-") nudgeFlyZoom(-0.5);
   });
 
   // ---------- Rundtur i 3D rundt en hytte eller et turmål ----------
   const ORBIT_PITCH = 62;
-  const orbit = { active: false, playing: false, raf: null, last: 0, bearing: 0, elapsed: 0, poi: null, target: null };
+  const orbit = { active: false, playing: false, raf: null, last: 0, bearing: 0, elapsed: 0, poi: null, target: null, zoomOffset: 0, appliedZoom: null };
   const orbitPanel = document.getElementById("orbit-panel");
   const orbitPlay = document.getElementById("orbit-play");
   const orbitSpeed = document.getElementById("orbit-speed");
@@ -1397,9 +1410,10 @@
     orbit.bearing = (orbit.bearing + Number(orbitSpeed.value) * dt) % 360;
     // Myk innflyging de første sekundene: fra høyt og rett ned til skrå rundtur
     const t = Math.min(orbit.elapsed / 4, 1), ease = 1 - Math.pow(1 - t, 3);
-    const zoom = orbitZoom(orbit.poi) - (1 - ease) * 1.6 + Math.sin(orbit.elapsed / 9) * 0.15;
+    const zoom = clampZoom(orbitZoom(orbit.poi) + orbit.zoomOffset - (1 - ease) * 1.6 + Math.sin(orbit.elapsed / 9) * 0.15);
     const pitch = 25 + (ORBIT_PITCH - 25) * ease;
     m3.jumpTo({ center: [orbit.poi.lon, orbit.poi.lat], bearing: orbit.bearing, pitch, zoom });
+    orbit.appliedZoom = zoom;
     const ele = orbit.poi.tags.ele ? Math.round(Number(orbit.poi.tags.ele)) : (typeof m3.queryTerrainElevation === "function" ? m3.queryTerrainElevation([orbit.poi.lon, orbit.poi.lat]) : null);
     orbitInfo.textContent = `${hutName(orbit.poi)}${ele != null && isFinite(ele) ? ` · ${Math.round(ele)} moh.` : ""} · ${Math.round(orbit.bearing)}°`;
     orbit.raf = requestAnimationFrame(orbitFrame);
@@ -1412,10 +1426,13 @@
     view3d.map.once("dragstart", pauseOrbit); // la brukeren se seg rundt uten at kameraet rykker tilbake
     orbit.raf = requestAnimationFrame(orbitFrame);
   }
+  function nudgeOrbitZoom(delta) { if (!orbit.active) return; orbit.zoomOffset += delta; if (!orbit.playing) orbitFrame(performance.now()); }
   function stopOrbit() {
     if (!orbit.active) return;
     pauseOrbit();
     orbit.active = false;
+    orbit.appliedZoom = null;
+    setFlightGestureMode(false);
     orbitPanel.hidden = true;
     if (orbit.target) { orbit.target.remove(); orbit.target = null; }
     orbit.poi = null;
@@ -1431,6 +1448,8 @@
     orbit.poi = poi;
     orbit.bearing = m3.getBearing();
     orbit.elapsed = 0;
+    orbit.zoomOffset = 0; orbit.appliedZoom = null;
+    setFlightGestureMode(true);
     // Ytre element plasseres av MapLibre (via transform), den animerte ringen må derfor ligge inni
     const el = document.createElement("div"); el.className = "orbit-target-wrap"; el.innerHTML = '<div class="orbit-target"></div>';
     orbit.target = new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([poi.lon, poi.lat]).addTo(m3);
@@ -1441,11 +1460,50 @@
 
   window.__orbit = (key) => { const poi = getPoi(key); if (poi) { map.closePopup(); startOrbit(poi); } };
   orbitPlay.addEventListener("click", () => (orbit.playing ? pauseOrbit() : playOrbit()));
+  document.getElementById("orbit-zoom-in").addEventListener("click", () => nudgeOrbitZoom(0.5));
+  document.getElementById("orbit-zoom-out").addEventListener("click", () => nudgeOrbitZoom(-0.5));
+  // Knip- og rullezoom under flyging eller rundtur. Kameraet settes på nytt hver ramme med jumpTo, som avbryter
+  // MapLibres egne zoomgester, så de slås av i flymodus og håndteres her i stedet.
+  function flightZoomGet() { return fly.route ? fly.zoom : orbit.active ? orbit.zoomOffset : null; }
+  function flightZoomSet(v) {
+    if (fly.route) { fly.zoom = clampZoom(v); if (!fly.playing) renderFly(); }
+    else if (orbit.active) { orbit.zoomOffset = v; if (!orbit.playing) orbitFrame(performance.now()); }
+  }
+  function setFlightGestureMode(on) {
+    const m3 = view3d.map;
+    if (!m3) return;
+    for (const h of [m3.scrollZoom, m3.touchZoomRotate]) { if (h) (on ? h.disable() : h.enable()); }
+  }
+  installFlightGestures = (m3) => {
+    const el = m3.getCanvasContainer();
+    const pinch = { active: false, startDist: 0, startVal: 0 };
+    const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    el.addEventListener("wheel", (e) => {
+      if (flightZoomGet() == null) return;
+      e.preventDefault();
+      const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 400 : 1;
+      flightZoomSet(flightZoomGet() - (e.deltaY * unit) / 400);
+    }, { passive: false });
+    el.addEventListener("touchstart", (e) => {
+      if (flightZoomGet() == null || e.touches.length !== 2) return;
+      pinch.active = true; pinch.startDist = dist(e.touches); pinch.startVal = flightZoomGet();
+    }, { passive: true, capture: true });
+    el.addEventListener("touchmove", (e) => {
+      if (!pinch.active || e.touches.length !== 2 || flightZoomGet() == null) return;
+      e.preventDefault();
+      flightZoomSet(pinch.startVal + Math.log2(dist(e.touches) / Math.max(pinch.startDist, 1)));
+    }, { passive: false, capture: true });
+    const end = () => { pinch.active = false; };
+    el.addEventListener("touchend", end, { capture: true });
+    el.addEventListener("touchcancel", end, { capture: true });
+  };
   document.getElementById("orbit-stop").addEventListener("click", stopOrbit);
   document.getElementById("trip-orbit").addEventListener("click", () => { if (trip.end) startOrbit(trip.end); });
   document.addEventListener("keydown", (e) => {
     if (!orbit.active || e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
     if (e.key === " ") { e.preventDefault(); orbit.playing ? pauseOrbit() : playOrbit(); }
+    else if (e.key === "+" || e.key === "=") nudgeOrbitZoom(0.5);
+    else if (e.key === "-") nudgeOrbitZoom(-0.5);
   });
 
   // ---------- Start ----------
