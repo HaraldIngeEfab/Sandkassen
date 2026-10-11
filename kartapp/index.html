@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Norgeskart med vær</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Norgeskart med vær</h1>
+    <form id="search-form" class="search" autocomplete="off">
+      <input id="search-input" type="search" placeholder="Søk etter stedsnavn (Geonorge)…" aria-label="Søk etter stedsnavn">
+      <button type="submit">Søk</button>
+    </form>
+    <div class="controls">
+      <label><input type="checkbox" id="toggle-weather" checked> Vær (Yr)</label>
+      <label><input type="checkbox" id="toggle-huts"> Turisthytter</label>
+      <label><input type="checkbox" id="toggle-trails"> Stier
+        <select id="trail-source" title="Kilde for stier">
+          <option value="osm">OpenStreetMap</option>
+          <option value="kartverket">Kartverket friluftsruter</option>
+        </select>
+      </label>
+      <label>Kart
+        <select id="basemap">
+          <option value="topo">Topografisk</option>
+          <option value="topograatone">Gråtone</option>
+          <option value="toporaster">Raster</option>
+        </select>
+      </label>
+      <button type="button" id="locate-btn" title="Vis været der du er">Min posisjon</button>
+      <button type="button" id="sim-btn" class="primary" title="Spill av varselet for de neste døgnene i kartutsnittet">Simuler vær i utsnittet</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="map" role="application" aria-label="Kart"></div>
+    <aside id="results" class="results" hidden></aside>
+    <div id="status" class="status" hidden></div>
+
+    <section id="sim-panel" class="sim-panel" hidden aria-label="Værsimulering">
+      <div class="sim-row">
+        <button type="button" id="sim-play" aria-label="Spill av">▶</button>
+        <div class="sim-time" id="sim-time">–</div>
+        <label class="sim-speed">Fart
+          <select id="sim-speed">
+            <option value="1200">Sakte</option>
+            <option value="600" selected>Normal</option>
+            <option value="250">Rask</option>
+          </select>
+        </label>
+        <button type="button" id="sim-refresh" title="Hent på nytt for nåværende utsnitt">Nytt utsnitt</button>
+        <button type="button" id="sim-close" aria-label="Lukk simulering">×</button>
+      </div>
+      <input type="range" id="sim-slider" min="0" max="0" value="0" step="1" aria-label="Tidspunkt">
+      <div class="sim-legend">
+        <span class="sim-legend-bar" aria-hidden="true"></span>
+        <span class="sim-legend-labels"><span>−20°</span><span>0°</span><span>10°</span><span>20°</span><span>30°</span></span>
+        <span class="sim-legend-note">Farge: temperatur · pil: vindretning · blå kant: nedbør</span>
+      </div>
+    </section>
+  </main>
+
+  <footer class="credits">
+    Kart: <a href="https://www.kartverket.no" target="_blank" rel="noopener">© Kartverket</a> via Geonorge ·
+    Stedsnavn, kommune og høyde: <a href="https://ws.geonorge.no" target="_blank" rel="noopener">ws.geonorge.no</a> ·
+    Vær: <a href="https://api.met.no" target="_blank" rel="noopener">MET Norge / Yr</a>
+    (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>) ·
+    Hytter og stier: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap-bidragsytere</a>
+    via Overpass og <a href="https://hiking.waymarkedtrails.org" target="_blank" rel="noopener">Waymarked Trails</a>
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
