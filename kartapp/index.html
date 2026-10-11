@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Norgeskart med vær</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
   <header class="topbar">
@@ -23,15 +23,24 @@
           <option value="kartverket">Kartverket friluftsruter</option>
         </select>
       </label>
+      <label>Satellitt
+        <select id="sat-select">
+          <option value="none">Ingen</option>
+          <option value="esri">Esri</option>
+          <option value="s2">Sentinel-2</option>
+        </select>
+      </label>
       <label>Kart
-        <select id="basemap">
+        <select id="map-select">
           <option value="topo">Topografisk</option>
           <option value="topograatone">Gråtone</option>
           <option value="toporaster">Raster</option>
-          <option value="esri">Satellitt (Esri)</option>
-          <option value="s2">Satellitt (Sentinel-2)</option>
-          <option value="hybrid">Hybrid: satellitt + kart</option>
+          <option value="none">Ingen</option>
         </select>
+      </label>
+      <label class="blend" title="Hvor mye kartet dekker over satellittbildet">Kart over satellitt
+        <input type="range" id="blend" min="0" max="100" step="5" value="60" aria-label="Kartets dekkevne over satellittbildet">
+        <span id="blend-value">60 %</span>
       </label>
       <button type="button" id="locate-btn" title="Vis været der du er">Min posisjon</button>
       <button type="button" id="sim-btn" class="primary" title="Spill av varselet for de neste døgnene i kartutsnittet">Simuler vær i utsnittet</button>
@@ -126,6 +135,6 @@
   </footer>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>

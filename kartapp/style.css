@@ -296,3 +296,8 @@ main { position: relative; flex: 1; min-height: 0; }
   cursor: pointer; font-variant-numeric: tabular-nums;
 }
 .hut-cluster.big { width: 46px; height: 46px; font-size: 14px; }
+
+.blend { display: flex; align-items: center; gap: 6px; }
+.blend input { width: 110px; }
+.blend #blend-value { font-variant-numeric: tabular-nums; min-width: 4ch; }
+.blend.disabled { opacity: .45; }

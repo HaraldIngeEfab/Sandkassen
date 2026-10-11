@@ -5,7 +5,7 @@ En enkel kartapp bygget på åpne norske datatjenester:
 | Hva | Tjeneste |
 |---|---|
 | Bakgrunnskart (topo, gråtone, raster) | Kartverkets cache-tjeneste via Geonorge (`cache.kartverket.no`) |
-| Satellitt | Esri World Imagery (Maxar m.fl.), Sentinel-2 cloudless fra EOX, og hybrid med Kartverkets gråtonekart oppå Esri |
+| Satellitt | Esri World Imagery (Maxar m.fl.) og Sentinel-2 cloudless fra EOX, fritt kombinert med Kartverkets kart over |
 | Stedsnavnsøk | `ws.geonorge.no/stedsnavn/v1/navn` |
 | Kommune og fylke for et punkt | `ws.geonorge.no/kommuneinfo/v1/punkt` |
 | Høyde over havet for et punkt | `ws.geonorge.no/hoydedata/v1/punkt` |
@@ -28,6 +28,9 @@ En enkel kartapp bygget på åpne norske datatjenester:
   gapahuker hentes først fra zoomnivå 9, siden det er svært mange av dem. Rød er betjent, brun er
   selvbetjent eller ubetjent, grønn er enkel bu.
   Popup viser operatør, senger, betaling, booking og lenker til nettside, UT.no og OSM, pluss «Vær her».
+- **Bakgrunn**: velg satellittbilde (ingen, Esri eller Sentinel-2) og kart (topografisk, gråtone, raster
+  eller ingen) hver for seg. Glideren «Kart over satellitt» styrer hvor mye kartet dekker over bildet,
+  fra rent satellittbilde til rent kart. Valgene huskes i nettleseren og gjelder også i 3D.
 - **3D**: knappen åpner samme utsnitt som 3D-kart med terreng. Kartverkets kartfliser draperes over
   høydemodellen, og vær-, hytte- og stilagene som er slått på følger med. Tilt og roter med to fingre
   på nettbrett eller høyreklikk og dra på PC. Glideren styrer hvor mye terrenget overdrives.

@@ -55,30 +55,64 @@
       maxZoom: 18, maxNativeZoom: 16, attribution: S2_ATTR,
     },
   };
-  // Hvert bakgrunnsvalg er en liste av fliselag (nederst først), med valgfri gjennomsiktighet
-  const BASEMAPS = {
-    topo: () => [{ ...TILESETS.kartverket("topo") }],
-    topograatone: () => [{ ...TILESETS.kartverket("topograatone") }],
-    toporaster: () => [{ ...TILESETS.kartverket("toporaster") }],
-    esri: () => [{ ...TILESETS.esri }],
-    s2: () => [{ ...TILESETS.s2 }],
-    hybrid: () => [{ ...TILESETS.esri }, { ...TILESETS.kartverket("topograatone"), opacity: 0.55 }],
-  };
-  function basemapLayers(key) { return (BASEMAPS[key] || BASEMAPS.topo)(); }
+  // Bakgrunn = valgfritt satellittbilde nederst + valgfritt kart over, med justerbar dekkevne
+  const satSelect = document.getElementById("sat-select");
+  const mapSelect = document.getElementById("map-select");
+  const blendInput = document.getElementById("blend");
+  const blendValue = document.getElementById("blend-value");
+  try {
+    const saved = JSON.parse(localStorage.getItem("kartapp.bakgrunn") || "{}");
+    if (saved.sat && [...satSelect.options].some((o) => o.value === saved.sat)) satSelect.value = saved.sat;
+    if (saved.kart && [...mapSelect.options].some((o) => o.value === saved.kart)) mapSelect.value = saved.kart;
+    if (typeof saved.blend === "number") blendInput.value = String(saved.blend);
+  } catch { /* ingen lagring tilgjengelig */ }
 
-  function createBasemap(key) {
-    return L.layerGroup(basemapLayers(key).map((t, i) => L.tileLayer(t.url, {
-      maxZoom: 18, maxNativeZoom: t.maxNativeZoom ?? Math.min(t.maxZoom, 18), opacity: t.opacity ?? 1, attribution: t.attribution,
-      zIndex: 1 + i, // bakgrunn ligger alltid under sti-laget (zIndex 10)
-    })));
+  function basemapState() {
+    let sat = satSelect.value, kart = mapSelect.value;
+    if (sat === "none" && kart === "none") kart = "topo"; // aldri helt tomt kart
+    const blend = Number(blendInput.value) / 100;
+    return { sat, kart, kartOpacity: sat === "none" ? 1 : blend };
   }
-  const basemapSelect = document.getElementById("basemap");
-  let baseLayer = createBasemap(basemapSelect.value).addTo(map);
-  basemapSelect.addEventListener("change", (e) => {
-    map.removeLayer(baseLayer);
-    baseLayer = createBasemap(e.target.value).addTo(map);
-    map.getContainer().classList.toggle("satellite", /^(esri|s2|hybrid)$/.test(e.target.value));
-  });
+  // Liste av fliselag, nederst først
+  function basemapLayers() {
+    const st = basemapState();
+    const list = [];
+    if (st.sat !== "none") list.push({ id: "sat", ...TILESETS[st.sat] });
+    if (st.kart !== "none") list.push({ id: "kart", ...TILESETS.kartverket(st.kart), opacity: st.kartOpacity });
+    return list;
+  }
+
+  const baseTiles = {}; // id -> L.TileLayer
+  let onBasemapChange = () => {}; // settes av 3D-delen lenger ned
+  let onBlendChange = () => {};
+  function applyBasemap() {
+    const st = basemapState();
+    for (const id of Object.keys(baseTiles)) { map.removeLayer(baseTiles[id]); delete baseTiles[id]; }
+    basemapLayers().forEach((t, i) => {
+      baseTiles[t.id] = L.tileLayer(t.url, {
+        maxZoom: 18, maxNativeZoom: t.maxNativeZoom ?? Math.min(t.maxZoom, 18), opacity: t.opacity ?? 1, attribution: t.attribution,
+        zIndex: 1 + i, // bakgrunn ligger alltid under sti-laget (zIndex 10)
+      }).addTo(map);
+    });
+    map.getContainer().classList.toggle("satellite", st.sat !== "none");
+    blendInput.disabled = st.sat === "none" || st.kart === "none";
+    blendInput.parentElement.classList.toggle("disabled", blendInput.disabled);
+    blendValue.textContent = `${blendInput.value} %`;
+    try { localStorage.setItem("kartapp.bakgrunn", JSON.stringify({ sat: satSelect.value, kart: mapSelect.value, blend: Number(blendInput.value) })); } catch { /* ignorer */ }
+    onBasemapChange();
+  }
+  function applyBlend() {
+    // Glideren justerer bare dekkevnen, uten å laste flisene på nytt
+    const st = basemapState();
+    blendValue.textContent = `${blendInput.value} %`;
+    if (baseTiles.kart) baseTiles.kart.setOpacity(st.kartOpacity);
+    onBlendChange(st.kartOpacity);
+    try { localStorage.setItem("kartapp.bakgrunn", JSON.stringify({ sat: satSelect.value, kart: mapSelect.value, blend: Number(blendInput.value) })); } catch { /* ignorer */ }
+  }
+  satSelect.addEventListener("change", applyBasemap);
+  mapSelect.addEventListener("change", applyBasemap);
+  blendInput.addEventListener("input", applyBlend);
+  applyBasemap();
 
   // Zoomnivå og målestokk nede til venstre
   L.control.scale({ metric: true, imperial: false, position: "bottomleft" }).addTo(map);
@@ -839,10 +873,9 @@
       terrain: { type: "raster-dem", tiles: [TERRAIN_TILES], encoding: "terrarium", tileSize: 256, maxzoom: 15, attribution: "Terreng: Mapzen / AWS Terrain Tiles" },
     };
     const layers = [];
-    basemapLayers(basemapSelect.value).forEach((t, i) => {
-      const id = `base${i}`;
-      sources[id] = { type: "raster", tileSize: 256, maxzoom: t.maxNativeZoom ?? t.maxZoom, tiles: [t.url], attribution: t.attribution.replace(/<[^>]+>/g, "") };
-      layers.push({ id, type: "raster", source: id, paint: { "raster-opacity": t.opacity ?? 1 } });
+    basemapLayers().forEach((t) => {
+      sources[t.id] = { type: "raster", tileSize: 256, maxzoom: t.maxNativeZoom ?? t.maxZoom, tiles: [t.url], attribution: t.attribution.replace(/<[^>]+>/g, "") };
+      layers.push({ id: t.id, type: "raster", source: t.id, paint: { "raster-opacity": t.opacity ?? 1 } });
     });
     if (trailToggle.checked) {
       sources.trails = trailSource.value === "osm"
@@ -852,6 +885,20 @@
     }
     return { version: 8, sources, layers, terrain: { source: "terrain", exaggeration: Number(exaggerationInput.value) } };
   }
+
+  // Bytt bakgrunn i et åpent 3D-kart uten å bygge det på nytt
+  function apply3dBasemap() {
+    const m3 = view3d.map;
+    for (const id of ["sat", "kart"]) { if (m3.getLayer(id)) m3.removeLayer(id); if (m3.getSource(id)) m3.removeSource(id); }
+    const before = m3.getLayer("trails") ? "trails" : (m3.getLayer("route-casing") ? "route-casing" : undefined);
+    basemapLayers().forEach((t) => {
+      m3.addSource(t.id, { type: "raster", tileSize: 256, maxzoom: t.maxNativeZoom ?? t.maxZoom, tiles: [t.url], attribution: t.attribution.replace(/<[^>]+>/g, "") });
+      m3.addLayer({ id: t.id, type: "raster", source: t.id, paint: { "raster-opacity": t.opacity ?? 1 } }, before);
+    });
+  }
+
+  onBasemapChange = () => { if (view3d.map && view3d.map.loaded()) apply3dBasemap(); };
+  onBlendChange = (opacity) => { if (view3d.map && view3d.map.getLayer("kart")) view3d.map.setPaintProperty("kart", "raster-opacity", opacity); };
 
   // Gjenbruk Leaflet-markører (vær og hytter) som MapLibre-markører med samme popup
   function addMarkers3d(layerGroup) {
