@@ -9,6 +9,8 @@ En enkel kartapp bygget på åpne norske datatjenester:
 | Kommune og fylke for et punkt | `ws.geonorge.no/kommuneinfo/v1/punkt` |
 | Høyde over havet for et punkt | `ws.geonorge.no/hoydedata/v1/punkt` |
 | Værvarsel | MET Norge / Yr, `api.met.no/weatherapi/locationforecast/2.0/compact` |
+| Turisthytter | OpenStreetMap via Overpass API (`tourism=alpine_hut`, `wilderness_hut`, enkle buer) |
+| Stier | Waymarked Trails (OSM-vandreruter som fliselag) eller Kartverkets WMS «Tur- og friluftsruter» |
 
 ## Funksjoner
 
@@ -17,6 +19,12 @@ En enkel kartapp bygget på åpne norske datatjenester:
   Høyden sendes med til Yr for mer presis temperatur i fjellet.
 - Søk etter stedsnavn, zoom til treffet og få værvarsel for stedet.
 - «Min posisjon» bruker nettleserens geolokasjon.
+- **Turisthytter**: slå på laget og zoom inn til minst nivå 8. Hyttene i utsnittet hentes fra OpenStreetMap
+  og vises med rød ring for betjente hytter, brun for selvbetjente og ubetjente, grønn for enkle buer.
+  Popup viser operatør, senger, betaling, booking og lenker til nettside, UT.no og OSM, pluss «Vær her».
+- **Stier**: fliselag med vandreruter fra Waymarked Trails (OpenStreetMap), eller Kartverkets nasjonale
+  database for tur- og friluftsruter som WMS. Kartverkets topografiske kart viser dessuten merkede stier
+  når du zoomer langt inn.
 - Popup viser nå-vær, vind, nedbør, fuktighet, trykk og de neste seks timene.
 - **Simuler vær i utsnittet**: henter varsler for et rutenett av inntil 20 punkter i det synlige
   kartutsnittet og spiller av de neste tre døgnene time for time. Hver rute farges etter temperatur,
@@ -50,4 +58,6 @@ eller ved å åpne `index.html` direkte). Da kalles `api.met.no` direkte fra net
 
 - Kartdata: © Kartverket, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
 - Værdata: © MET Norge, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) / NLOD
+- Hytter og stier: © OpenStreetMap-bidragsytere, [ODbL](https://www.openstreetmap.org/copyright).
+  Overpass API og Waymarked Trails er frivillig drevne tjenester, så vær nøktern med trafikken.
 - Leaflet lastes fra unpkg (BSD-2).

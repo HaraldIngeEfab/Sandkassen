@@ -168,3 +168,23 @@ main { position: relative; flex: 1; min-height: 0; }
 .sim-marker .precip { font-weight: 400; color: #0b4fa0; }
 .sim-cell { transition: fill .3s, stroke .3s; }
 @media (prefers-reduced-motion: reduce) { .sim-marker .wind, .sim-cell { transition: none; } }
+
+/* Turisthytter */
+.hut-marker {
+  width: 26px; height: 26px; margin-left: -13px; margin-top: -13px;
+  display: flex; align-items: center; justify-content: center;
+  background: #fff; border: 2px solid var(--hut, #8a3b12); border-radius: 50%;
+  box-shadow: 0 1px 4px rgba(0,0,0,.3);
+}
+.hut-marker svg { width: 16px; height: 16px; fill: var(--hut, #8a3b12); }
+.hut-marker.staffed { --hut: #c0392b; }
+.hut-marker.self-service { --hut: #8a3b12; }
+.hut-marker.shelter { --hut: #4a6b2a; }
+.hut h3 { margin: 0 0 2px; font-size: 1rem; }
+.hut .kind { color: #666; font-size: 0.85rem; margin-bottom: 6px; }
+.hut table { border-collapse: collapse; font-size: 0.85rem; }
+.hut th { text-align: left; color: #666; font-weight: 500; padding: 1px 8px 1px 0; vertical-align: top; }
+.hut td { padding: 1px 0; }
+.hut .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.hut .actions a, .hut .actions button { font-size: 0.85rem; padding: 4px 8px; border: 1px solid #c9d1dc; border-radius: 6px; background: #f5f7fa; color: #111; text-decoration: none; cursor: pointer; }
+.hut-legend { display: inline-flex; gap: 10px; align-items: center; }

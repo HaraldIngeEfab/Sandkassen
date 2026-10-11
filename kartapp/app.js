@@ -552,6 +552,142 @@
     else if (e.key === "Escape") closeSimulation();
   });
 
+  // ---------- Stier (fliselag) ----------
+  const TRAIL_LAYERS = {
+    // Vandreruter fra OpenStreetMap, tegnet av Waymarked Trails
+    osm: () => L.tileLayer("https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png", {
+      maxZoom: 18, opacity: 0.85,
+      attribution: '<a href="https://hiking.waymarkedtrails.org">Waymarked Trails</a> · © OpenStreetMap-bidragsytere',
+    }),
+    // Nasjonal database for tur- og friluftsruter (Kartverket) som WMS
+    kartverket: () => L.tileLayer.wms("https://wms.geonorge.no/skwms1/wms.friluftsruter2", {
+      layers: "fotrute,skiloype,sykkelrute,annenrute",
+      format: "image/png", transparent: true, version: "1.3.0", opacity: 0.9,
+      attribution: '<a href="https://kartkatalog.geonorge.no">Kartverket, tur- og friluftsruter</a>',
+    }),
+  };
+  let trailLayer = null;
+  const trailToggle = document.getElementById("toggle-trails");
+  const trailSource = document.getElementById("trail-source");
+  function updateTrails() {
+    if (trailLayer) { map.removeLayer(trailLayer); trailLayer = null; }
+    if (!trailToggle.checked) return;
+    trailLayer = TRAIL_LAYERS[trailSource.value]().addTo(map);
+    trailLayer.on("tileerror", () => setStatus("Fikk ikke lastet stier fra " + trailSource.options[trailSource.selectedIndex].text, true));
+  }
+  trailToggle.addEventListener("change", updateTrails);
+  trailSource.addEventListener("change", () => { if (trailToggle.checked) updateTrails(); });
+
+  // ---------- Turisthytter fra OpenStreetMap (Overpass) ----------
+  const OVERPASS_ENDPOINTS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
+  const HUT_MIN_ZOOM = 8;
+  const hutLayer = L.layerGroup();
+  const hutToggle = document.getElementById("toggle-huts");
+  const huts = { loadedBounds: null, timer: null, inflight: null, byId: new Map() };
+
+  const HUT_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 12h3v8h5v-5h4v5h5v-8h3z"/></svg>';
+
+  function hutKind(tags) {
+    if (tags.tourism === "alpine_hut") return { cls: "staffed", label: "Betjent turisthytte" };
+    if (tags.tourism === "wilderness_hut") return { cls: "self-service", label: "Selvbetjent eller ubetjent hytte" };
+    return { cls: "shelter", label: "Gapahuk eller enkel bu" };
+  }
+
+  async function overpass(query) {
+    let lastErr;
+    for (const url of OVERPASS_ENDPOINTS) {
+      try {
+        const res = await fetch(url, { method: "POST", body: "data=" + encodeURIComponent(query), headers: { "Content-Type": "application/x-www-form-urlencoded" } });
+        if (!res.ok) throw new Error(`${res.status} fra ${new URL(url).host}`);
+        return await res.json();
+      } catch (err) { lastErr = err; }
+    }
+    throw lastErr || new Error("Overpass utilgjengelig");
+  }
+
+  function hutPopup(h) {
+    const t = h.tags;
+    const kind = hutKind(t);
+    const name = t.name || t["name:no"] || "Hytte uten navn";
+    const rows = [];
+    if (t.operator) rows.push(["Driftes av", t.operator]);
+    const beds = t.beds || t.capacity;
+    if (beds) rows.push(["Senger", beds]);
+    if (t.fee) rows.push(["Betaling", t.fee === "yes" ? "Ja" : t.fee === "no" ? "Nei" : t.fee]);
+    if (t.reservation) rows.push(["Booking", t.reservation === "required" ? "Påkrevd" : t.reservation === "recommended" ? "Anbefalt" : t.reservation]);
+    if (t.opening_hours) rows.push(["Åpent", t.opening_hours]);
+    if (t.ele) rows.push(["Høyde", `${Math.round(Number(t.ele))} moh.`]);
+    if (t.phone || t["contact:phone"]) rows.push(["Telefon", t.phone || t["contact:phone"]]);
+    if (t.description) rows.push(["Info", t.description]);
+    const site = t.website || t["contact:website"] || t.url;
+    const utUrl = "https://ut.no/sok?q=" + encodeURIComponent(name);
+    const osmUrl = `https://www.openstreetmap.org/${h.type}/${h.id}`;
+    return `
+      <div class="hut">
+        <h3>${esc(name)}</h3>
+        <div class="kind">${esc(kind.label)}</div>
+        ${rows.length ? `<table>${rows.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</table>` : ""}
+        <div class="actions">
+          <button type="button" onclick="window.__wxHere(${h.lat},${h.lon},${JSON.stringify(name).replace(/"/g, "&quot;")})">Vær her</button>
+          ${site ? `<a href="${esc(site)}" target="_blank" rel="noopener">Nettside</a>` : ""}
+          <a href="${esc(utUrl)}" target="_blank" rel="noopener">Søk på UT.no</a>
+          <a href="${esc(osmUrl)}" target="_blank" rel="noopener">OSM</a>
+        </div>
+      </div>`;
+  }
+  window.__wxHere = (lat, lon, name) => showWeatherAt(lat, lon, name);
+
+  async function loadHuts() {
+    if (!hutToggle.checked) return;
+    if (map.getZoom() < HUT_MIN_ZOOM) { setStatus("Zoom inn for å se turisthytter"); return; }
+    const view = map.getBounds();
+    if (huts.loadedBounds && huts.loadedBounds.contains(view)) { setStatus(""); return; }
+    const b = view.pad(0.4); // hent litt utenfor utsnittet, så små flytt ikke gir nye kall
+    const bbox = `${b.getSouth().toFixed(4)},${b.getWest().toFixed(4)},${b.getNorth().toFixed(4)},${b.getEast().toFixed(4)}`;
+    const query = `[out:json][timeout:25];(
+      nwr["tourism"~"^(alpine_hut|wilderness_hut)$"](${bbox});
+      nwr["amenity"="shelter"]["shelter_type"="basic_hut"](${bbox});
+    );out center tags;`;
+    setStatus("Henter turisthytter fra OpenStreetMap …");
+    const myRequest = (huts.inflight = {});
+    try {
+      const data = await overpass(query);
+      if (huts.inflight !== myRequest) return; // et nyere kall har tatt over
+      huts.loadedBounds = b;
+      let added = 0;
+      for (const el of data.elements || []) {
+        const key = `${el.type}/${el.id}`;
+        if (huts.byId.has(key)) continue;
+        const lat = el.lat ?? (el.center && el.center.lat);
+        const lon = el.lon ?? (el.center && el.center.lon);
+        if (lat == null || lon == null) continue;
+        const h = { type: el.type, id: el.id, lat, lon, tags: el.tags || {} };
+        const kind = hutKind(h.tags);
+        const marker = L.marker([lat, lon], {
+          title: h.tags.name || kind.label,
+          icon: L.divIcon({ className: "", iconSize: null, html: `<div class="hut-marker ${kind.cls}">${HUT_SVG}</div>` }),
+        }).bindPopup(() => hutPopup(h), { maxWidth: 320 });
+        marker.addTo(hutLayer);
+        huts.byId.set(key, marker);
+        added++;
+      }
+      setStatus(huts.byId.size ? "" : "Ingen hytter registrert i dette utsnittet");
+      if (!huts.byId.size) setTimeout(() => setStatus(""), 3000);
+    } catch (err) {
+      if (huts.inflight === myRequest) setStatus("Kunne ikke hente hytter: " + err.message, true);
+    }
+  }
+
+  function scheduleHuts() {
+    clearTimeout(huts.timer);
+    huts.timer = setTimeout(loadHuts, 700);
+  }
+  hutToggle.addEventListener("change", () => {
+    if (hutToggle.checked) { map.addLayer(hutLayer); loadHuts(); }
+    else { map.removeLayer(hutLayer); setStatus(""); }
+  });
+  map.on("moveend", () => { if (hutToggle.checked) scheduleHuts(); });
+
   // ---------- Start ----------
   loadCityWeather();
 })();

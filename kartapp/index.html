@@ -15,7 +15,14 @@
       <button type="submit">Søk</button>
     </form>
     <div class="controls">
-      <label><input type="checkbox" id="toggle-weather" checked> Vær på kartet (Yr)</label>
+      <label><input type="checkbox" id="toggle-weather" checked> Vær (Yr)</label>
+      <label><input type="checkbox" id="toggle-huts"> Turisthytter</label>
+      <label><input type="checkbox" id="toggle-trails"> Stier
+        <select id="trail-source" title="Kilde for stier">
+          <option value="osm">OpenStreetMap</option>
+          <option value="kartverket">Kartverket friluftsruter</option>
+        </select>
+      </label>
       <label>Kart
         <select id="basemap">
           <option value="topo">Topografisk</option>
@@ -60,7 +67,9 @@
     Kart: <a href="https://www.kartverket.no" target="_blank" rel="noopener">© Kartverket</a> via Geonorge ·
     Stedsnavn, kommune og høyde: <a href="https://ws.geonorge.no" target="_blank" rel="noopener">ws.geonorge.no</a> ·
     Vær: <a href="https://api.met.no" target="_blank" rel="noopener">MET Norge / Yr</a>
-    (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>)
+    (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>) ·
+    Hytter og stier: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap-bidragsytere</a>
+    via Overpass og <a href="https://hiking.waymarkedtrails.org" target="_blank" rel="noopener">Waymarked Trails</a>
   </footer>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
