@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sandkassen</title>
+  <meta name="description" content="Startside for appene i Sandkassen: Norgeskart med vær og Nærmeste stoppested." />
+  <style>
+    :root {
+      --bg: #f4f5f7; --card: #fff; --text: #1b1d21; --muted: #6b7280; --border: #e2e4e9;
+      --shadow: 0 1px 3px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #111317; --card: #1a1d23; --text: #e8eaef; --muted: #9aa1ad; --border: #2b2f38; --shadow: none; }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text); line-height: 1.45;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    main { max-width: 820px; margin: 0 auto; padding: 40px 16px; }
+    h1 { margin: 0 0 .3rem; font-size: 1.8rem; }
+    .lead { margin: 0 0 1.5rem; color: var(--muted); }
+    .apps { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .app {
+      display: block; text-decoration: none; color: inherit;
+      background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; box-shadow: var(--shadow);
+      transition: transform .12s ease, border-color .12s ease;
+    }
+    .app:hover, .app:focus-visible { transform: translateY(-2px); border-color: var(--accent); outline: none; }
+    .app .icon { font-size: 2.2rem; line-height: 1; }
+    .app h2 { margin: .6rem 0 .3rem; font-size: 1.2rem; }
+    .app p { margin: 0; color: var(--muted); font-size: .95rem; }
+    .app .go { display: inline-block; margin-top: .9rem; font-weight: 600; color: var(--accent); }
+    .app.kart { --accent: #1d6fc0; }
+    .app.entur { --accent: #c01d2e; }
+    footer { margin-top: 2.5rem; color: var(--muted); font-size: .85rem; }
+    footer a { color: inherit; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Sandkassen</h1>
+    <p class="lead">Velg en app.</p>
+
+    <div class="apps">
+      <a class="app kart" href="kartapp/">
+        <div class="icon" aria-hidden="true">🗺️</div>
+        <h2>Norgeskart med vær</h2>
+        <p>Kartverkets kart med værvarsel fra Yr, turisthytter, turmål, stier og 3D-terreng.</p>
+        <span class="go">Åpne kartet →</span>
+      </a>
+
+      <a class="app entur" href="entur/">
+        <div class="icon" aria-hidden="true">🚏</div>
+        <h2>Nærmeste stoppested</h2>
+        <p>Søk etter et sted og se nøkkeldata og sanntidsavganger for nærmeste holdeplass, fra Entur.</p>
+        <span class="go">Finn stoppested →</span>
+      </a>
+    </div>
+
+    <footer>
+      <p>Kildekode på <a href="https://github.com/HaraldIngeEfab/Sandkassen">GitHub</a>.</p>
+    </footer>
+  </main>
+</body>
+</html>

@@ -1,11 +1,10 @@
-# Publiserer appen i entur/ til GitHub Pages.
+# Publiserer hele repoet til GitHub Pages: startsiden i rota, kartapp/ og entur/.
 # Krever at Pages er satt til kilde «GitHub Actions» under Settings → Pages i repoet.
 name: Publiser til GitHub Pages
 
 on:
   push:
     branches: [main]
-    paths: ["entur/**", ".github/workflows/pages.yml"]
   workflow_dispatch:
 
 permissions:
@@ -28,6 +27,6 @@ jobs:
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: entur
+          path: .
       - id: deployment
         uses: actions/deploy-pages@v4

@@ -31,9 +31,9 @@ cd entur && python3 -m http.server 8000   # http://localhost:8000
 
 ## Publisering
 
-Arbeidsflyten i `.github/workflows/pages.yml` publiserer denne mappen til GitHub Pages ved push til `main`.
+Arbeidsflyten i `.github/workflows/pages.yml` publiserer hele repoet (startside, `kartapp/` og `entur/`) til GitHub Pages ved push til `main`.
 Første gang må Pages slås på i repoet: **Settings → Pages → Source: GitHub Actions**.
-Siden blir da tilgjengelig på `https://<bruker>.github.io/<repo>/`.
+Appen blir da tilgjengelig på `https://<bruker>.github.io/<repo>/entur/`.
 
 ## Om API-ene
 
