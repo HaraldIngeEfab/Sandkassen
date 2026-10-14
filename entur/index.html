@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nærmeste stoppested</title>
+  <meta name="description" content="Søk etter et sted og se nøkkeldata og avganger for nærmeste stoppested, med data fra Entur." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23c01d2e'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%23fff'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1><span class="dot" aria-hidden="true"></span> Nærmeste stoppested</h1>
+    <p class="lead">Søk etter en adresse, et sted eller et stoppested. Appen finner nærmeste holdeplass og viser avgangene der, med sanntid fra Entur.</p>
+  </header>
+
+  <main>
+    <section class="search" aria-label="Stedssøk">
+      <form id="searchForm" autocomplete="off" role="search">
+        <div class="search-row">
+          <input id="searchInput" type="search" placeholder="F.eks. Karl Johans gate 1, Bergen stasjon, Nidarosdomen …"
+                 aria-label="Søk etter sted" aria-autocomplete="list" aria-controls="suggestions" aria-expanded="false" />
+          <button type="submit" class="primary">Søk</button>
+          <button type="button" id="geoBtn" class="secondary" title="Bruk min posisjon">📍 Min posisjon</button>
+        </div>
+        <ul id="suggestions" class="suggestions" role="listbox" hidden></ul>
+      </form>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section id="result" class="result" hidden>
+      <div class="place-line">
+        <span class="muted">Valgt sted:</span> <strong id="placeName"></strong>
+        <span id="placeMeta" class="muted"></span>
+      </div>
+
+      <article class="card stop-card" id="stopCard">
+        <header class="stop-header">
+          <div>
+            <h2 id="stopName"></h2>
+            <div id="stopModes" class="modes"></div>
+          </div>
+          <div class="distance" id="stopDistance"></div>
+        </header>
+
+        <dl class="facts" id="stopFacts"></dl>
+
+        <div id="situations" class="situations" hidden></div>
+
+        <div class="departures-head">
+          <h3>Neste avganger</h3>
+          <div class="controls">
+            <label class="toggle"><input type="checkbox" id="autoRefresh" checked /> Oppdater automatisk</label>
+            <button type="button" id="refreshBtn" class="secondary small">Oppdater nå</button>
+          </div>
+        </div>
+        <div id="updatedAt" class="muted small-text"></div>
+        <table class="departures" aria-label="Avganger">
+          <thead>
+            <tr><th>Linje</th><th>Mot</th><th>Plattform</th><th class="num">Avgang</th></tr>
+          </thead>
+          <tbody id="departures"></tbody>
+        </table>
+        <p id="noDepartures" class="muted" hidden>Ingen avganger de neste timene.</p>
+
+        <p class="links">
+          <a id="enturLink" href="#" target="_blank" rel="noopener">Åpne i Entur reiseplanlegger ↗</a>
+          <a id="mapLink" href="#" target="_blank" rel="noopener">Vis i kart ↗</a>
+        </p>
+      </article>
+
+      <section class="nearby" aria-label="Andre stoppesteder i nærheten">
+        <h3>Andre stoppesteder i nærheten</h3>
+        <ul id="nearbyList" class="nearby-list"></ul>
+      </section>
+    </section>
+  </main>
+
+  <footer>
+    <p>Data fra <a href="https://developer.entur.org/" target="_blank" rel="noopener">Entur</a> (Geocoder og Journey Planner v3), lisensiert under
+      <a href="https://data.norge.no/nlod/no/2.0" target="_blank" rel="noopener">NLOD</a>. Stoppestedsdata fra Nasjonalt stoppestedsregister (NSR).</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
